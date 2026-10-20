@@ -52,7 +52,7 @@ impl Trip {
     pub fn describe(&self) -> String {
         match self {
             Self::TempExceeded { temp_c, cap_c } => {
-                format!("temperature {temp_c:.1}C reached cap {cap_c:.0}C")
+                format!("temperature {temp_c:.1}°C reached cap {cap_c:.0}°C")
             }
             Self::TimeExceeded {
                 elapsed_secs,

@@ -111,7 +111,7 @@ impl SettingsScreen {
     fn label(item: Item) -> &'static str {
         match item {
             Item::Heading(h) => h,
-            Item::TempMax => "Temperature cap (C)",
+            Item::TempMax => "Temperature cap (°C)",
             Item::TimeMax => "Time cap per test",
             Item::Cooldown => "Cooldown between tests (s)",
             Item::StopOnFail => "Stop on first failure",

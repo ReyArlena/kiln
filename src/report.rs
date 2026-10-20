@@ -40,7 +40,7 @@ pub fn markdown(run: &Run) -> String {
         out,
         "- Temperature cap: {}",
         g.temp_max_c
-            .map(|c| format!("{c:.0}C"))
+            .map(|c| format!("{c:.0}°C"))
             .unwrap_or_else(|| "none".into())
     );
     let _ = writeln!(
@@ -60,7 +60,7 @@ pub fn markdown(run: &Run) -> String {
         let secs = (r.ended - r.started).num_seconds().max(0) as u64;
         let temp = r
             .max_temp_c
-            .map(|t| format!("{t:.1}C"))
+            .map(|t| format!("{t:.1}°C"))
             .unwrap_or_else(|| "-".into());
         let _ = writeln!(
             out,
@@ -128,7 +128,7 @@ pub fn markdown(run: &Run) -> String {
     {
         let _ = writeln!(out, "\n## Sensors\n");
         let _ = writeln!(out, "- Samples: {}", run.samples.len());
-        let _ = writeln!(out, "- Peak CPU temperature: {max:.1}C");
+        let _ = writeln!(out, "- Peak CPU temperature: {max:.1}°C");
         if let Some(peak_mem) = run.samples.iter().map(|s| s.mem_used_bytes).max() {
             let _ = writeln!(out, "- Peak memory used: {}", format_bytes(peak_mem));
         }

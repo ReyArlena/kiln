@@ -168,7 +168,7 @@ fn doctor(state: &AppState) -> Result<i32> {
             "Guard sensor: {} ({})",
             s.id(),
             s.read_c()
-                .map(|c| format!("{c:.1}C"))
+                .map(|c| format!("{c:.1}°C"))
                 .unwrap_or_else(|| "unreadable".into())
         ),
         None => println!("Guard sensor: none found (temperature cap will not work)"),
@@ -336,7 +336,7 @@ async fn run(state: &AppState, args: RunArgs) -> Result<i32> {
     println!(
         "  guards: temp {}  time {}  cooldown {}s  stop_on_fail {}",
         g.temp_max_c
-            .map(|c| format!("{c:.0}C"))
+            .map(|c| format!("{c:.0}°C"))
             .unwrap_or_else(|| "off".into()),
         g.time_max_secs
             .map(format_duration_secs)
@@ -420,7 +420,7 @@ fn print_event(event: &Event, verbose: bool, sample_count: &mut usize) {
                 println!(
                     "[{stamp}]   temp {}  cpu {}  freq {}  mem {}",
                     s.primary_temp_c
-                        .map(|t| format!("{t:.1}C"))
+                        .map(|t| format!("{t:.1}°C"))
                         .unwrap_or_else(|| "-".into()),
                     s.cpu_percent
                         .map(|p| format!("{p:.0}%"))
@@ -464,7 +464,7 @@ fn summary_table(run: &Run) -> String {
             r.status.label(),
             format_duration_secs(secs),
             r.max_temp_c
-                .map(|t| format!("{t:.0}C"))
+                .map(|t| format!("{t:.0}°C"))
                 .unwrap_or_else(|| "-".into()),
             r.status.detail()
         ));

@@ -42,7 +42,7 @@ pub fn draw_status_bar(
             spans.push(sep());
             spans.push(Span::raw("CPU "));
             spans.push(Span::styled(
-                format!("{:>3}C", t.round() as i32),
+                format!("{:>3}°C", t.round() as i32),
                 theme::temp(t, temp_cap),
             ));
         }
@@ -84,7 +84,7 @@ pub fn draw_status_bar(
                     id.split('/').next().unwrap_or("nvme").to_ascii_uppercase()
                 )));
                 spans.push(Span::styled(
-                    format!("{:>3}C ", t.round() as i32),
+                    format!("{:>3}°C ", t.round() as i32),
                     theme::temp(*t, Some(80.0)),
                 ));
             }
@@ -98,7 +98,7 @@ pub fn draw_status_bar(
                 spans.push(sep());
                 spans.push(Span::raw("GPU "));
                 spans.push(Span::styled(
-                    format!("{:>3}C ", t.round() as i32),
+                    format!("{:>3}°C ", t.round() as i32),
                     theme::temp(*t, Some(95.0)),
                 ));
             }
@@ -108,7 +108,7 @@ pub fn draw_status_bar(
                 spans.push(sep());
                 spans.push(Span::raw(format!("{extra} ")));
                 spans.push(Span::styled(
-                    format!("{:>3}C ", t.round() as i32),
+                    format!("{:>3}°C ", t.round() as i32),
                     theme::temp(*t, None),
                 ));
             }

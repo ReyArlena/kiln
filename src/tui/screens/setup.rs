@@ -496,7 +496,7 @@ impl SetupScreen {
                 )),
                 _ => {
                     let label = match row {
-                        Row::Guard(GuardField::TempMax) => "Temperature cap (C)".to_string(),
+                        Row::Guard(GuardField::TempMax) => "Temperature cap (°C)".to_string(),
                         Row::Guard(GuardField::TimeMax) => "Time cap per test".to_string(),
                         Row::Guard(GuardField::Cooldown) => {
                             "Cooldown between tests (s)".to_string()

@@ -353,10 +353,10 @@ impl DashboardScreen {
         let temp_title = match self.latest_temp {
             Some(t) => Line::from(vec![
                 Span::raw(" CPU "),
-                Span::styled(format!("{t:.1}C"), theme::temp(t, self.temp_cap)),
+                Span::styled(format!("{t:.1}°C"), theme::temp(t, self.temp_cap)),
                 Span::styled(
                     self.temp_cap
-                        .map(|c| format!(" / cap {c:.0}C "))
+                        .map(|c| format!(" / cap {c:.0}°C "))
                         .unwrap_or_else(|| " ".into()),
                     theme::dim(),
                 ),

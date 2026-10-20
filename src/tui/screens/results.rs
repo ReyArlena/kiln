@@ -238,7 +238,7 @@ impl ResultsScreen {
             let secs = (r.ended - r.started).num_seconds().max(0) as u64;
             let temp = r
                 .max_temp_c
-                .map(|t| format!("{t:.0}C"))
+                .map(|t| format!("{t:.0}°C"))
                 .unwrap_or_else(|| "-".into());
             let mut line = Line::from(vec![
                 Span::raw(format!(" {:<2} ", i + 1)),
