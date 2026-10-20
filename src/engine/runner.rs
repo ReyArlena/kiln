@@ -277,7 +277,7 @@ async fn run_plan(
     };
     let path = run.save(&ctx.run_dir)?;
     (ctx.on_file_created)(&path);
-    let _ = events.send(Event::RunFinished(run.clone()));
+    let _ = events.send(Event::RunFinished(Box::new(run.clone())));
     Ok(run)
 }
 

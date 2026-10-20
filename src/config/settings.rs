@@ -10,17 +10,13 @@ use crate::engine::Guards;
 /// Which temperature sensor the guard watches.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SensorChoice {
     /// Pick the CPU package sensor automatically (k10temp Tctl, coretemp Package, ...).
+    #[default]
     Auto,
     /// A specific `<hwmon name>/<label>` pair, for example `k10temp/Tctl`.
     Named(String),
-}
-
-impl Default for SensorChoice {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 /// The always-visible sensor bar in the TUI.

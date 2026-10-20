@@ -21,7 +21,7 @@ pub fn format_bytes(bytes: u64) -> String {
         if bytes < size {
             continue;
         }
-        if bytes % size == 0 {
+        if bytes.is_multiple_of(size) {
             return format!("{}{suffix}", bytes / size);
         }
         return format!("{:.1}{suffix}", bytes as f64 / size as f64);

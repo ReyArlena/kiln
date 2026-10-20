@@ -44,5 +44,5 @@ pub enum Event {
     /// Periodic sensor reading.
     Sample(Sample),
     /// Everything is done and written to disk.
-    RunFinished(Run),
+    RunFinished(Box<Run>),
 }

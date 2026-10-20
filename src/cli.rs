@@ -413,7 +413,7 @@ fn print_event(event: &Event, verbose: bool, sample_count: &mut usize) {
         }
         Event::Sample(s) => {
             *sample_count += 1;
-            if verbose || *sample_count % 10 == 0 {
+            if verbose || (*sample_count).is_multiple_of(10) {
                 println!(
                     "[{stamp}]   temp {}  cpu {}  freq {}  mem {}",
                     s.primary_temp_c

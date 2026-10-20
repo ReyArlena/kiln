@@ -55,6 +55,11 @@ pub trait Test: Send + Sync {
     fn plan(&self, params: &ParamSet, env: &EnvSnapshot) -> Result<Job>;
 }
 
+/// Decides pass/fail once a job has ended.
+pub type VerdictFn = Box<dyn Fn(&Outcome) -> Verdict + Send + Sync>;
+/// Extracts metrics from one line of output.
+pub type ParserFn = Box<dyn Fn(&str) -> Vec<(String, f64)> + Send + Sync>;
+
 /// What the runner actually executes for one test.
 pub struct Job {
     pub kind: JobKind,
@@ -63,9 +68,9 @@ pub struct Job {
     /// Commands captured before and after the main work (SMART, link state, ...).
     pub snapshots: Vec<Snapshot>,
     /// Decide pass/fail from the exit status, parsed metrics and captured output.
-    pub verdict: Box<dyn Fn(&Outcome) -> Verdict + Send + Sync>,
+    pub verdict: VerdictFn,
     /// Turn each output line into zero or more metrics.
-    pub parser: Box<dyn Fn(&str) -> Vec<(String, f64)> + Send + Sync>,
+    pub parser: ParserFn,
 }
 
 pub enum JobKind {

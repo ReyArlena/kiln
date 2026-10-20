@@ -131,7 +131,7 @@ impl Run {
             .filter(|p| p.is_dir())
             .filter_map(|dir| Run::load(&dir.join("run.json")).ok().map(|run| (dir, run)))
             .collect();
-        runs.sort_by(|a, b| b.1.started.cmp(&a.1.started));
+        runs.sort_by_key(|(_, run)| std::cmp::Reverse(run.started));
         runs
     }
 
