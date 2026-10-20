@@ -7,6 +7,7 @@ pub mod event;
 pub mod guards;
 pub mod params;
 pub mod plan;
+pub mod presets;
 pub mod registry;
 pub mod result;
 pub mod runner;

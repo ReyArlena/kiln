@@ -27,6 +27,26 @@ Benchmarks are for comparing kiln runs against each other (`kiln compare <run> <
 
 `kiln info <id>` prints the full breakdown of each one.
 
+## Plans
+
+A plan is a named sequence of tests with their parameters, repeats and guards. Five ship with kiln:
+
+| plan | what | about |
+| --- | --- | --- |
+| `quick-check` | health snapshot, the benchmarks, short RAM hash | 5 min |
+| `new-build-shakedown` | health, CPU and RAM stress with verification, RAM hash, benchmarks, health again | 1 h |
+| `overnight-burn-in` | alternating CPU and RAM stress, long RAM hash, stop on first failure, 85°C cap | 8 h |
+| `storage-shakedown` | **wipes a device**: fio verify, btrfs harness x2, health before and after | depends |
+| `benchmarks` | CPU, memory bandwidth, memory latency, disk read | few min |
+
+In the TUI the Plans pane sits above the test list; Enter opens one in Setup where every value can still be changed. `w` in Setup saves the current form as your own plan (`~/.config/kiln/plans/<name>.toml`, hand-editable). Headless:
+
+```sh
+kiln plans
+kiln run --plan quick-check
+kiln run --plan ~/my-plan.toml
+```
+
 ## Install
 
 ```sh

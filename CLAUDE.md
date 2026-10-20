@@ -34,6 +34,10 @@ cargo fmt
 
 TUI cannot be driven in this environment without a TTY. Use `tests/tui_render.rs` (ratatui TestBackend) for layout checks, and the headless CLI for behaviour.
 
+## Plans
+
+Built-in plans live in `src/engine/presets.rs`; a unit test checks every entry names a real test and real parameter keys. Saved plans are TOML in `plans_dir`, looked up by slug. Setup opens from a plan via `SetupScreen::from_plan` and saves with `w`.
+
 ## Benchmarks
 
 In-process benchmarks (`src/suite/bench.rs` helpers) must stay cache-resident per thread so the all-core score measures cores, not DRAM. They warn in debug builds; always judge numbers from `--release`.

@@ -42,6 +42,8 @@ pub enum Command {
     Info { test: String },
     /// Run tests headlessly, in order, and write results to the runs directory
     Run(RunArgs),
+    /// List built-in and saved plans
+    Plans,
     /// List past runs, newest first
     Runs,
     /// Print a Markdown report for a run (id, or path to run.json)
@@ -70,9 +72,9 @@ pub enum Command {
 pub struct RunArgs {
     /// Test ids to run in order, e.g. `cpu-stress ram-hash`
     pub tests: Vec<String>,
-    /// Run a saved plan file instead of listing tests
-    #[arg(long, value_name = "FILE", conflicts_with = "tests")]
-    pub plan: Option<PathBuf>,
+    /// Run a plan by name (built-in or saved, see `kiln plans`) or a path to a plan file
+    #[arg(long, value_name = "NAME|FILE", conflicts_with = "tests")]
+    pub plan: Option<String>,
     /// Parameter override, `key=value`. Applies to every listed test that has that key
     #[arg(long = "set", value_name = "KEY=VALUE")]
     pub sets: Vec<String>,
@@ -141,6 +143,7 @@ pub async fn run_cli(cli: Cli) -> Result<i32> {
         Command::List { full } => list(&state, full),
         Command::Info { test } => info(&state, &test),
         Command::Run(args) => run(&state, args).await,
+        Command::Plans => plans(&state),
         Command::Runs => runs(&state),
         Command::Report { run } => {
             let run = load_run(&state, &run)?;
@@ -309,7 +312,15 @@ fn info(state: &AppState, id: &str) -> Result<i32> {
 
 async fn run(state: &AppState, args: RunArgs) -> Result<i32> {
     let plan = match &args.plan {
-        Some(path) => Plan::load(path)?,
+        Some(name) => {
+            let path = PathBuf::from(name);
+            if path.is_file() {
+                Plan::load(&path)?
+            } else {
+                Plan::find(&state.paths.plans_dir, name)
+                    .with_context(|| format!("no plan `{name}`. Try `kiln plans`"))?
+            }
+        }
         None => plan_from_args(state, &args)?,
     };
     if plan.tests.is_empty() {
@@ -573,6 +584,36 @@ fn parse_sets(sets: &[String]) -> Result<ParamSet> {
         map.insert(k.trim().to_string(), ParamValue::Text(v.trim().to_string()));
     }
     Ok(map)
+}
+
+fn plans(state: &AppState) -> Result<i32> {
+    for plan in Plan::all(&state.paths.plans_dir) {
+        let kind = if plan.builtin { "built-in" } else { "saved" };
+        let tests: Vec<String> = plan
+            .tests
+            .iter()
+            .map(|t| {
+                if t.repeat > 1 {
+                    format!("{}x{}", t.test, t.repeat)
+                } else {
+                    t.test.clone()
+                }
+            })
+            .collect();
+        println!(
+            "{:<24} {kind:<9} ~{:<8} {}",
+            plan.slug(),
+            format_duration_secs(plan.estimated_secs()),
+            tests.join(" ")
+        );
+        println!("{:<24} {}", "", plan.description);
+        println!();
+    }
+    println!(
+        "run one with: kiln run --plan <name>   (saved plans live in {})",
+        state.paths.plans_dir.display()
+    );
+    Ok(0)
 }
 
 fn runs(state: &AppState) -> Result<i32> {

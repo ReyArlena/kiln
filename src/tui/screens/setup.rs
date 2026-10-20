@@ -21,8 +21,17 @@ use super::Effect;
 enum Row {
     Heading(String),
     Guard(GuardField),
-    Profile { test: usize },
-    Param { test: usize, spec: ParamSpec },
+    Profile {
+        test: usize,
+    },
+    Param {
+        test: usize,
+        spec: ParamSpec,
+    },
+    /// How many times to run this test back to back.
+    Repeat {
+        test: usize,
+    },
     Start,
 }
 
@@ -43,9 +52,12 @@ struct TestEntry {
     profile_idx: usize,
     /// Current text for each parameter, keyed by spec key.
     values: ParamSet,
+    repeat: u32,
 }
 
 pub struct SetupScreen {
+    /// Name of the plan this setup came from, used when saving.
+    plan_name: String,
     rows: Vec<Row>,
     tests: Vec<TestEntry>,
     guards: Guards,
@@ -58,6 +70,7 @@ pub struct SetupScreen {
 impl SetupScreen {
     pub fn empty() -> Self {
         Self {
+            plan_name: String::new(),
             rows: Vec::new(),
             tests: Vec::new(),
             guards: Guards::default(),
@@ -89,9 +102,11 @@ impl SetupScreen {
                 profiles: Profile::list(&state.paths.profiles_for(id)),
                 profile_idx: 0,
                 values,
+                repeat: 1,
             });
         }
         let mut screen = Self {
+            plan_name: String::new(),
             rows: Vec::new(),
             tests,
             guards: state.config.guards.clone(),
@@ -100,6 +115,41 @@ impl SetupScreen {
             editing: None,
             errors: Vec::new(),
         };
+        screen.rebuild_rows(state);
+        screen.cursor = screen
+            .rows
+            .iter()
+            .position(|r| !matches!(r, Row::Heading(_)))
+            .unwrap_or(0);
+        screen
+    }
+
+    /// Build the form from a saved or built-in plan: its tests, parameters,
+    /// repeats and guards, ready to tweak and start.
+    pub fn from_plan(state: &AppState, plan: &Plan) -> Self {
+        let ids: Vec<String> = plan.tests.iter().map(|e| e.test.clone()).collect();
+        let mut screen = Self::new(state, &ids);
+        screen.plan_name = plan.name.clone();
+        screen.guards = plan.guards.clone();
+        // `new` keeps only the ids it knows, so walk both lists together by id.
+        let mut entries = plan.tests.iter();
+        for test in &mut screen.tests {
+            let Some(entry) = entries.by_ref().find(|e| e.test == test.id) else {
+                continue;
+            };
+            test.repeat = entry.repeat.max(1);
+            if let Some(def) = state.registry.get(&test.id) {
+                let specs = def.params();
+                for (key, value) in &entry.params {
+                    // Normalise through the spec so loaded values keep their variant.
+                    if let Some(spec) = specs.iter().find(|s| s.key == key)
+                        && let Ok(v) = spec.parse(&value.to_text())
+                    {
+                        test.values.insert(key.clone(), v);
+                    }
+                }
+            }
+        }
         screen.rebuild_rows(state);
         screen.cursor = screen
             .rows
@@ -139,6 +189,7 @@ impl SetupScreen {
                 for spec in specs {
                     rows.push(Row::Param { test: i, spec });
                 }
+                rows.push(Row::Repeat { test: i });
             }
         }
         rows.push(Row::Heading(String::new()));
@@ -159,6 +210,7 @@ impl SetupScreen {
                 ("Enter", "edit / start"),
                 ("Space", "toggle / cycle"),
                 ("r", "start run"),
+                ("w", "save as plan"),
                 ("Esc", "back"),
                 ("?", "help"),
             ]
@@ -197,6 +249,7 @@ impl SetupScreen {
                 .get(spec.key)
                 .map(|v| v.to_display())
                 .unwrap_or_default(),
+            Row::Repeat { test } => self.tests[*test].repeat.to_string(),
             Row::Heading(_) | Row::Start => String::new(),
         }
     }
@@ -244,6 +297,14 @@ impl SetupScreen {
                 self.begin_edit();
             }
             Action::Char('r') => return self.start(state),
+            Action::Char('w') => {
+                return vec![Effect::Modal(Modal::input(
+                    "Save as plan",
+                    "Name for this set of tests and settings:",
+                    &self.plan_name,
+                    "save-plan",
+                ))];
+            }
             Action::Back => return vec![Effect::Goto(super::Screen::Picker)],
             Action::Click { x, y } => {
                 if let Some(Hit::Row { index, .. }) = hits.find(x, y)
@@ -282,7 +343,10 @@ impl SetupScreen {
         if self.is_toggle_row(self.cursor) {
             return;
         }
-        if matches!(self.rows[self.cursor], Row::Guard(_) | Row::Param { .. }) {
+        if matches!(
+            self.rows[self.cursor],
+            Row::Guard(_) | Row::Param { .. } | Row::Repeat { .. }
+        ) {
             let current = self.value_text(&self.rows[self.cursor]);
             let current = if current == "(required)" {
                 String::new()
@@ -331,6 +395,12 @@ impl SetupScreen {
                 }
                 Err(e) => Err(e.to_string()),
             },
+            Row::Repeat { test } => text
+                .parse::<u32>()
+                .ok()
+                .filter(|n| (1..=1000).contains(n))
+                .map(|n| self.tests[*test].repeat = n)
+                .ok_or_else(|| "between 1 and 1000".to_string()),
             _ => Ok(()),
         };
         self.errors[self.cursor] = result.err();
@@ -462,19 +532,50 @@ impl SetupScreen {
     }
 
     fn build_plan(&self) -> Plan {
-        let mut plan = Plan::new("tui", self.guards.clone());
+        let name = if self.plan_name.is_empty() {
+            "tui"
+        } else {
+            &self.plan_name
+        };
+        let mut plan = Plan::new(name, self.guards.clone());
         for t in &self.tests {
             let mut entry = PlanEntry::new(&t.id);
             entry.params = t.values.clone();
+            entry.repeat = t.repeat;
             plan.tests.push(entry);
         }
         plan
     }
 
+    /// Save the current form as a named plan. Called after the name prompt.
+    pub fn save_plan(&mut self, state: &AppState, name: &str) -> Vec<Effect> {
+        let name = name.trim();
+        if name.is_empty() {
+            return vec![Effect::Toast("plan not saved: empty name".into())];
+        }
+        self.plan_name = name.to_string();
+        let plan = self.build_plan();
+        match plan.save_in(&state.paths.plans_dir) {
+            Ok(path) => {
+                state.paths.restore_owner(&path);
+                vec![Effect::Toast(format!(
+                    "saved plan `{name}` to {}",
+                    path.display()
+                ))]
+            }
+            Err(e) => vec![Effect::Toast(format!("could not save plan: {e}"))],
+        }
+    }
+
     pub fn draw(&mut self, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
         let [body, hints] =
             Layout::vertical([Constraint::Min(5), Constraint::Length(1)]).areas(area);
-        let block = pane_block("Set up run", true);
+        let title = if self.plan_name.is_empty() {
+            "Set up run".to_string()
+        } else {
+            format!("Set up run: {}", self.plan_name)
+        };
+        let block = pane_block(&title, true);
         let inner = block.inner(body);
         frame.render_widget(block, body);
         hits.add(body, Hit::Pane(0));
@@ -504,10 +605,12 @@ impl SetupScreen {
                         Row::Guard(GuardField::StopOnFail) => "Stop on first failure".to_string(),
                         Row::Profile { .. } => "Profile".to_string(),
                         Row::Param { spec, .. } => spec.label.to_string(),
+                        Row::Repeat { .. } => "Repeat".to_string(),
                         _ => String::new(),
                     };
                     let help = match row {
                         Row::Param { spec, .. } => spec.help.to_string(),
+                        Row::Repeat { .. } => "Run this test this many times in a row".to_string(),
                         Row::Profile { .. } => "Space cycles saved parameter sets".to_string(),
                         _ => String::new(),
                     };

@@ -58,6 +58,8 @@ pub struct App {
     pending_exit: Option<(Exit, Instant)>,
     /// Popups still to show at startup, one after another.
     startup: std::collections::VecDeque<Modal>,
+    /// Text from the last `Input` modal, read by the confirm handler.
+    last_input: Option<String>,
 }
 
 impl App {
@@ -100,6 +102,7 @@ impl App {
             exit: None,
             pending_exit: None,
             startup,
+            last_input: None,
             state,
         }
     }
@@ -180,6 +183,7 @@ impl App {
                 }
                 if let Some(confirmed) = outcome {
                     let tag = modal.tag.clone();
+                    self.last_input = modal.input_value();
                     self.modal = None;
                     if confirmed {
                         self.on_modal_confirmed(&tag);
@@ -286,6 +290,10 @@ impl App {
                 vec![Effect::Quit]
             }
             "elevate" => vec![Effect::Elevate],
+            "save-plan" => {
+                let name = self.last_input.take().unwrap_or_default();
+                self.setup.save_plan(&self.state, &name)
+            }
             "delete-run" => self.history.delete_current(&self.state),
             "reset-config" => vec![Effect::ResetConfig],
             "delete-runs" => vec![Effect::DeleteAllRuns],
@@ -319,6 +327,10 @@ impl App {
                 Effect::Toast(text) => self.toast(&text),
                 Effect::SetupFor(ids) => {
                     self.setup = SetupScreen::new(&self.state, &ids);
+                    self.goto(Screen::Setup);
+                }
+                Effect::SetupPlan(plan) => {
+                    self.setup = SetupScreen::from_plan(&self.state, &plan);
                     self.goto(Screen::Setup);
                 }
                 Effect::StartRun(plan) => self.start_run(plan),

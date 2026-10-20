@@ -4,7 +4,7 @@
 //! Profiles are saved parameter sets for a single test. A plan entry can name
 //! a profile and still override individual values on top.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -16,9 +16,14 @@ use super::params::ParamSet;
 pub struct Plan {
     pub name: String,
     #[serde(default)]
+    pub description: String,
+    #[serde(default)]
     pub guards: Guards,
     #[serde(default)]
     pub tests: Vec<PlanEntry>,
+    /// Shipped with kiln rather than saved by the user. Not stored.
+    #[serde(skip)]
+    pub builtin: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -54,9 +59,65 @@ impl Plan {
     pub fn new(name: &str, guards: Guards) -> Self {
         Self {
             name: name.to_string(),
+            description: String::new(),
             guards,
             tests: Vec::new(),
+            builtin: false,
         }
+    }
+
+    /// File-safe name: `New Build Shakedown` -> `new-build-shakedown`.
+    pub fn slug(&self) -> String {
+        slugify(&self.name)
+    }
+
+    /// Save under `dir/<slug>.toml`.
+    pub fn save_in(&self, dir: &Path) -> Result<PathBuf> {
+        let path = dir.join(format!("{}.toml", self.slug()));
+        self.save(&path)?;
+        Ok(path)
+    }
+
+    /// Saved plans in `dir`, sorted by name. Missing dir is fine.
+    pub fn list_saved(dir: &Path) -> Vec<Plan> {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut plans: Vec<Plan> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "toml"))
+            .filter_map(|p| Plan::load(&p).ok())
+            .collect();
+        plans.sort_by(|a, b| a.name.cmp(&b.name));
+        plans
+    }
+
+    /// Built-in plans followed by saved ones.
+    pub fn all(dir: &Path) -> Vec<Plan> {
+        let mut plans = crate::engine::presets::builtin_plans();
+        plans.extend(Plan::list_saved(dir));
+        plans
+    }
+
+    /// Find a plan by name or slug, case-insensitively, among built-in and saved.
+    pub fn find(dir: &Path, name: &str) -> Option<Plan> {
+        let wanted = slugify(name);
+        Plan::all(dir).into_iter().find(|p| p.slug() == wanted)
+    }
+
+    /// Rough total of the fixed durations in the plan, for display.
+    pub fn estimated_secs(&self) -> u64 {
+        self.tests
+            .iter()
+            .map(|t| {
+                t.params
+                    .get("duration")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(60)
+                    * t.repeat.max(1) as u64
+            })
+            .sum()
     }
 
     pub fn load(path: &Path) -> Result<Self> {
@@ -72,6 +133,19 @@ impl Plan {
         std::fs::write(path, toml::to_string_pretty(self)?)
             .with_context(|| format!("writing {}", path.display()))
     }
+}
+
+/// Lowercase, words joined by `-`, nothing else.
+pub fn slugify(name: &str) -> String {
+    let mut slug = String::new();
+    for c in name.trim().chars() {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c.to_ascii_lowercase());
+        } else if !slug.ends_with('-') && !slug.is_empty() {
+            slug.push('-');
+        }
+    }
+    slug.trim_end_matches('-').to_string()
 }
 
 /// A saved parameter set for one test.
@@ -118,6 +192,43 @@ impl Profile {
 mod tests {
     use super::*;
     use crate::engine::params::ParamValue;
+
+    #[test]
+    fn slugs_and_lookup() {
+        assert_eq!(slugify("New Build Shakedown"), "new-build-shakedown");
+        assert_eq!(slugify("  Overnight  (8h) "), "overnight-8h");
+        let dir = tempfile::tempdir().unwrap();
+        let mut plan = Plan::new("My Plan", Guards::default());
+        plan.tests.push(PlanEntry::new("ram-hash"));
+        plan.save_in(dir.path()).unwrap();
+        assert_eq!(Plan::list_saved(dir.path()).len(), 1);
+        assert_eq!(
+            Plan::find(dir.path(), "my plan").unwrap().tests[0].test,
+            "ram-hash"
+        );
+        assert!(Plan::find(dir.path(), "quick-check").unwrap().builtin);
+    }
+
+    #[test]
+    fn builtin_plans_only_reference_known_tests_and_params() {
+        let registry = crate::engine::Registry::builtin();
+        for plan in crate::engine::presets::builtin_plans() {
+            for entry in &plan.tests {
+                let test = registry
+                    .get(&entry.test)
+                    .unwrap_or_else(|| panic!("{}: unknown test {}", plan.name, entry.test));
+                let specs = test.params();
+                for key in entry.params.keys() {
+                    assert!(
+                        specs.iter().any(|s| s.key == key),
+                        "{}: {} has no param {key}",
+                        plan.name,
+                        entry.test
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn plan_round_trips_through_toml() {

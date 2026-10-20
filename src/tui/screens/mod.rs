@@ -32,6 +32,8 @@ pub enum Effect {
     Toast(String),
     /// Open setup for these test ids, in order.
     SetupFor(Vec<String>),
+    /// Open setup pre-filled from a plan.
+    SetupPlan(Box<Plan>),
     StartRun(Plan),
     CancelTest,
     CancelRun,

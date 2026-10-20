@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TUI: test picker, setup form, live dashboard with temperature sparkline and kernel log, results, history with log viewer, settings with developer tools. Keyboard (arrows and h/j/k/l reserved for navigation) and mouse.
 - Persistent sensor status bar, configurable per item.
 - Saved profiles per test and saved plans, as TOML under the config directory.
+- Plans: five built in (Quick Check, New Build Shakedown, Overnight Burn-in, Storage Shakedown, Benchmarks), a Plans pane in the picker, `w` in Setup to save the current form as a plan, a Repeat field per test, `kiln plans`, and `kiln run --plan <name>`.
 - Settings in `~/.config/kiln`, runs in `~/.local/share/kiln`, resolved from the invoking user when run through sudo.
 - `install.sh`: downloads the prebuilt binary for the current architecture, to `/usr/local/bin` when run with sudo or `~/.local/bin` otherwise; `--uninstall` and `--purge`.
 - Dashboard banner with spinner, test position and progress.

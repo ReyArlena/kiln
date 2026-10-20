@@ -205,6 +205,8 @@ pub enum ModalKind {
     Confirm,
     /// Must type `expected` exactly then press Enter.
     Typed { expected: String, input: TextInput },
+    /// Free text, Enter submits (non-empty), Esc cancels.
+    Input { input: TextInput },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -229,6 +231,25 @@ impl Modal {
             tag: String::new(),
             copy_text: None,
             copy_requested: false,
+        }
+    }
+
+    /// Ask for a line of text.
+    pub fn input(title: &str, body: &str, initial: &str, tag: &str) -> Self {
+        Self {
+            kind: ModalKind::Input {
+                input: TextInput::with_value(initial),
+            },
+            tag: tag.into(),
+            ..Self::message(title, body)
+        }
+    }
+
+    /// The text typed into an `Input` modal.
+    pub fn input_value(&self) -> Option<String> {
+        match &self.kind {
+            ModalKind::Input { input } => Some(input.value.clone()),
+            _ => None,
         }
     }
 
@@ -291,6 +312,14 @@ impl Modal {
                     None
                 }
             },
+            ModalKind::Input { input } => match key.code {
+                KeyCode::Esc => Some(false),
+                KeyCode::Enter => (!input.value.trim().is_empty()).then_some(true),
+                _ => {
+                    input.handle_key(key);
+                    None
+                }
+            },
         }
     }
 
@@ -310,6 +339,7 @@ impl Modal {
         let extra = match self.kind {
             ModalKind::Message | ModalKind::Confirm => 0,
             ModalKind::Typed { .. } => 2,
+            ModalKind::Input { .. } => 1,
         };
         let rect = centered(area, width, body_lines + extra + 2);
         frame.render_widget(Clear, rect);
@@ -349,6 +379,15 @@ impl Modal {
                 Span::styled("Esc", theme::key()),
                 Span::raw(" no"),
             ])),
+            ModalKind::Input { input } => {
+                lines.push(input.line(true));
+                lines.push(Line::from(vec![
+                    Span::styled("Enter", theme::key()),
+                    Span::raw(" save   "),
+                    Span::styled("Esc", theme::key()),
+                    Span::raw(" cancel"),
+                ]));
+            }
             ModalKind::Typed { expected, input } => {
                 lines.push(Line::from(vec![
                     Span::raw("Type "),
