@@ -20,6 +20,11 @@ pub fn selected() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
+/// The item another pane is describing, when the cursor is elsewhere.
+pub fn selected_inactive() -> Style {
+    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+}
+
 pub fn focused_border() -> Style {
     Style::default().fg(ACCENT)
 }

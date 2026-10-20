@@ -253,7 +253,11 @@ impl ResultsScreen {
                 ),
             ]);
             if i == self.cursor {
-                line = line.style(theme::selected());
+                line = line.style(if self.focus == PANE_LIST {
+                    theme::selected()
+                } else {
+                    theme::selected_inactive()
+                });
             }
             lines.push(line);
             hits.add(

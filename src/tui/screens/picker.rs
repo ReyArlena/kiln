@@ -294,9 +294,12 @@ impl PickerScreen {
             let info = test.info();
             let ok = self.deps[i].all_ok();
             let mark = if self.selected[i] { "[x]" } else { "[ ]" };
-            // One highlight at a time: the list whose item the Details pane shows.
-            let mut style = if i == self.cursor && self.focus != PANE_PLANS {
+            // Filled bar where the cursor is; a quiet marker on the item the
+            // Details pane is describing when focus is over there.
+            let mut style = if i == self.cursor && self.focus == PANE_LIST {
                 theme::selected()
+            } else if i == self.cursor && self.focus == PANE_DETAIL {
+                theme::selected_inactive()
             } else {
                 Style::default()
             };
