@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings in `~/.config/kiln`, runs in `~/.local/share/kiln`, resolved from the invoking user when run through sudo.
 - `install.sh` with `--uninstall` and `--purge`.
 - Dashboard banner with spinner, test position and progress.
-- Dashboard graphs one row per series: CPU temperature always, plus what the test declares (core frequency, NVMe temperature of the target drive, hash throughput).
+- Dashboard graphs: one braille row per component (CPU temperature, usage, frequency, memory, CPU and GPU watts, every NVMe, GPU), colour sliding green to red through each range, plus metrics the running test reports (e.g. MB/s). Each graph has a toggle in settings.
+- CPU package power (RAPL, root only) and GPU power in the header.
 - Launch popup explaining which tests need root.
 - GitHub Actions: CI (fmt, clippy, tests) and a release workflow that attaches a static musl binary to `v*` tags.
 
