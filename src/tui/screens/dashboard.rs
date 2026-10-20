@@ -28,9 +28,9 @@ const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 const TEMP_FLOOR_C: f64 = 30.0;
 /// Most points kept per graph.
 const MAX_POINTS: usize = 600;
-/// Width of the label column left of each graph, and the value column right of it.
-const GUTTER: u16 = 6;
-const VALUE_WIDTH: u16 = 8;
+/// Widths of the value and label columns right of each graph.
+const VALUE_WIDTH: u16 = 7;
+const LABEL_WIDTH: u16 = 7;
 
 /// One live graph: its spec plus the points collected so far.
 struct Series {
@@ -651,10 +651,11 @@ impl DashboardScreen {
 /// value on the right. Colour runs green to yellow to red as the value
 /// climbs through the series' range, like btop.
 fn draw_series(frame: &mut Frame, row: Rect, series: &Series, temp_cap: Option<f32>) {
-    let [gutter, graph, value_area] = Layout::horizontal([
-        Constraint::Length(GUTTER),
+    // Graph on the left, then the value, then its label: `⣿⣿⣿  71°C CPU`.
+    let [graph, value_area, label_area] = Layout::horizontal([
         Constraint::Min(1),
         Constraint::Length(VALUE_WIDTH),
+        Constraint::Length(LABEL_WIDTH),
     ])
     .areas(row);
     let (floor, ceiling) = series.range(temp_cap);
@@ -662,10 +663,10 @@ fn draw_series(frame: &mut Frame, row: Rect, series: &Series, temp_cap: Option<f
 
     frame.render_widget(
         Paragraph::new(Span::styled(
-            format!("{:<width$}", series.spec.label, width = GUTTER as usize),
-            theme::dim(),
+            format!(" {}", series.spec.label),
+            theme::help(),
         )),
-        gutter,
+        label_area,
     );
 
     // Two points per cell: the braille left and right dot columns.
