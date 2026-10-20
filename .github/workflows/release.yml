@@ -1,8 +1,10 @@
-# Builds a static Linux binary and attaches it to the GitHub Release for a tag.
+# Builds static Linux binaries and attaches them to the GitHub Release for a tag.
 #
 # Cut a release with:
 #   git tag v0.1.0 && git push origin v0.1.0
-# The asset name must match install.sh (kiln-x86_64-unknown-linux-musl).
+# Asset names must match install.sh: kiln-linux-<arch>.
+# Both targets build natively (GitHub provides arm64 runners), statically
+# linked against musl so the binaries run on any Linux, live ISOs included.
 
 name: Release
 
@@ -15,14 +17,23 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust with the musl target
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-musl
+          targets: ${{ matrix.target }}
 
       - name: Install musl tools
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -31,13 +42,13 @@ jobs:
         run: cargo test --locked
 
       - name: Build
-        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Name the asset
-        run: cp target/x86_64-unknown-linux-musl/release/kiln kiln-x86_64-unknown-linux-musl
+        run: cp target/${{ matrix.target }}/release/kiln kiln-linux-${{ matrix.arch }}
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2
         with:
-          files: kiln-x86_64-unknown-linux-musl
+          files: kiln-linux-${{ matrix.arch }}
           generate_release_notes: true

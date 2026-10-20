@@ -14,7 +14,14 @@ REPO="ReyArlena/kiln"
 BIN_DIR="${KILN_BIN_DIR:-$HOME/.local/bin}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/kiln"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/kiln"
-ASSET="kiln-x86_64-unknown-linux-musl"
+
+# Release assets are named kiln-linux-<arch>.
+case "$(uname -m)" in
+    x86_64|amd64) ARCH="x86_64" ;;
+    aarch64|arm64) ARCH="aarch64" ;;
+    *) ARCH="" ;;
+esac
+ASSET="kiln-linux-$ARCH"
 
 case "$1" in
     --uninstall|--purge)
@@ -44,6 +51,10 @@ if command -v cargo >/dev/null 2>&1; then
 else
     if ! command -v curl >/dev/null 2>&1; then
         echo "Need either cargo (https://rustup.rs) or curl" >&2
+        exit 1
+    fi
+    if [ -z "$ARCH" ]; then
+        echo "No prebuilt binary for $(uname -m). Install the Rust toolchain (https://rustup.rs) and rerun." >&2
         exit 1
     fi
     url="https://github.com/$REPO/releases/latest/download/$ASSET"

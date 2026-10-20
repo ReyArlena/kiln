@@ -109,7 +109,7 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 ### Release
 
-Tag and push; GitHub Actions builds the musl binary and attaches it to the release, which is what `install.sh` downloads on machines without cargo:
+Tag and push; GitHub Actions builds static binaries for x86_64 and aarch64 (`kiln-linux-<arch>`) and attaches them to the release, which is what `install.sh` downloads on machines without cargo:
 
 ```sh
 git tag v0.1.0 && git push origin v0.1.0
