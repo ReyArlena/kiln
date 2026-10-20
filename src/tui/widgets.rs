@@ -284,10 +284,10 @@ impl Modal {
         .max(30)
         .min(area.width.saturating_sub(4).max(1));
         let body_lines = self.body.lines().count() as u16 + 2;
+        // Lines beyond the body: a blank, then the key hints (Typed adds the prompt and input).
         let extra = match self.kind {
-            ModalKind::Message => 2,
-            ModalKind::Confirm => 2,
-            ModalKind::Typed { .. } => 4,
+            ModalKind::Message | ModalKind::Confirm => 0,
+            ModalKind::Typed { .. } => 2,
         };
         let rect = centered(area, width, body_lines + extra + 2);
         frame.render_widget(Clear, rect);

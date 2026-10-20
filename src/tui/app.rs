@@ -56,13 +56,16 @@ pub struct App {
     exit: Option<Exit>,
     /// An exit that is waiting for the running test to stop first.
     pending_exit: Option<(Exit, Instant)>,
+    /// Popups still to show at startup, one after another.
+    startup: std::collections::VecDeque<Modal>,
 }
 
 impl App {
     pub fn new(state: AppState) -> Self {
         let picker = PickerScreen::new(&state);
+        let mut startup = std::collections::VecDeque::new();
         // Offer to relaunch through sudo when it is available; otherwise just explain.
-        let modal = (!state.is_root()).then(|| {
+        let root_modal = (!state.is_root()).then(|| {
             if which::which("sudo").is_ok() {
                 Modal::confirm(
                     "Not running as root",
@@ -76,6 +79,9 @@ impl App {
                 )
             }
         });
+        startup.extend(root_modal);
+        startup.extend(tools_modal(&state));
+        let modal = startup.pop_front();
         Self {
             screen: Screen::Picker,
             picker,
@@ -93,6 +99,7 @@ impl App {
             toast: None,
             exit: None,
             pending_exit: None,
+            startup,
             state,
         }
     }
@@ -169,6 +176,10 @@ impl App {
                     self.modal = None;
                     if confirmed {
                         self.on_modal_confirmed(&tag);
+                    }
+                    // Next startup popup, unless the confirmation opened something else.
+                    if self.modal.is_none() {
+                        self.modal = self.startup.pop_front();
                     }
                 }
                 return;
@@ -446,6 +457,29 @@ impl App {
     }
 }
 
+/// A startup popup listing every tool the tests call, with a tick or cross,
+/// and one install command for whatever is missing. `None` when all present.
+fn tools_modal(state: &AppState) -> Option<Modal> {
+    let bins = crate::engine::deps::all_binaries(state.registry.iter().map(|t| t.deps()));
+    let missing: Vec<&str> = bins
+        .iter()
+        .copied()
+        .filter(|b| which::which(b).is_err())
+        .collect();
+    if missing.is_empty() {
+        return None;
+    }
+    let mut body =
+        String::from("Tests call these programs. Missing ones leave their tests greyed out.\n\n");
+    for bin in &bins {
+        let mark = if missing.contains(bin) { "✗" } else { "✓" };
+        body.push_str(&format!("  {mark} {bin}\n"));
+    }
+    body.push_str("\nInstall the missing ones:\n  ");
+    body.push_str(&crate::engine::deps::install_command(&missing));
+    Some(Modal::message("Missing tools", &body))
+}
+
 /// Await the next runner event, or pend forever when no run is active so the
 /// select loop ignores this branch.
 async fn recv_run_event(run: &mut Option<RunHandle>) -> Option<Event> {
@@ -475,5 +509,12 @@ impl App {
             _ => Screen::Picker,
         };
         self.goto(screen);
+    }
+}
+
+impl App {
+    /// Feed one key event, as the terminal would. For tests.
+    pub fn key_for_test(&mut self, key: crossterm::event::KeyEvent) {
+        self.on_terminal_event(crossterm::event::Event::Key(key));
     }
 }

@@ -50,6 +50,10 @@ impl Category {
 pub trait Test: Send + Sync {
     fn info(&self) -> &TestInfo;
     fn deps(&self) -> Vec<Dep>;
+    /// Programs the test uses when present but can run without.
+    fn optional_bins(&self) -> Vec<&'static str> {
+        Vec::new()
+    }
     fn params(&self) -> Vec<ParamSpec>;
     /// Validate the resolved parameters against the machine and build the job.
     fn plan(&self, params: &ParamSet, env: &EnvSnapshot) -> Result<Job>;

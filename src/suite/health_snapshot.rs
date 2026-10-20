@@ -62,6 +62,10 @@ impl Test for HealthSnapshot {
         vec![]
     }
 
+    fn optional_bins(&self) -> Vec<&'static str> {
+        vec!["nvme", "smartctl"]
+    }
+
     fn params(&self) -> Vec<ParamSpec> {
         vec![]
     }

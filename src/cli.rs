@@ -190,6 +190,25 @@ fn doctor(state: &AppState) -> Result<i32> {
             );
         }
     }
+    let bins = crate::engine::deps::all_binaries(state.registry.iter().map(|t| t.deps()));
+    let optional: Vec<&str> = state
+        .registry
+        .iter()
+        .flat_map(|t| t.optional_bins())
+        .filter(|b| !bins.contains(b))
+        .collect();
+    let missing: Vec<&str> = bins
+        .iter()
+        .chain(optional.iter())
+        .copied()
+        .filter(|b| which::which(b).is_err())
+        .collect();
+    if !missing.is_empty() {
+        println!(
+            "\nInstall everything missing:\n  {}",
+            crate::engine::deps::install_command(&missing)
+        );
+    }
     println!("\nConfig: {}", state.paths.config_file.display());
     println!("Runs:   {}", state.paths.runs_dir.display());
     Ok(if all_ok { 0 } else { 1 })

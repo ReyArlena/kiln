@@ -103,25 +103,54 @@ fn hwmon_present(name: &str) -> bool {
     })
 }
 
-/// Map a binary to the package that provides it on common distros.
-fn install_hint(bin: &str) -> String {
-    let package = match bin {
-        "stress-ng" => "stress-ng",
-        "fio" => "fio",
+/// The package that provides a binary (names are the same on Arch, Fedora and Debian).
+fn package_for(bin: &str) -> &str {
+    match bin {
         "nvme" => "nvme-cli",
         "smartctl" => "smartmontools",
         "mkfs.btrfs" | "btrfs" => "btrfs-progs",
-        "dmidecode" => "dmidecode",
         "lspci" => "pciutils",
         "sensors" => "lm_sensors",
         other => other,
-    };
-    match distro_family().as_deref() {
-        Some("arch") => format!("sudo pacman -S {package}"),
-        Some("fedora") => format!("sudo dnf install {package}"),
-        Some("debian") => format!("sudo apt install {package}"),
-        _ => format!("install package {package}"),
     }
+}
+
+/// One command that installs the packages for all the given binaries, for
+/// this distro. Duplicates (e.g. `btrfs` and `mkfs.btrfs`) collapse.
+pub fn install_command(bins: &[&str]) -> String {
+    let mut packages: Vec<&str> = Vec::new();
+    for bin in bins {
+        let package = package_for(bin);
+        if !packages.contains(&package) {
+            packages.push(package);
+        }
+    }
+    let list = packages.join(" ");
+    match distro_family().as_deref() {
+        Some("arch") => format!("sudo pacman -S {list}"),
+        Some("fedora") => format!("sudo dnf install {list}"),
+        Some("debian") => format!("sudo apt install {list}"),
+        _ => format!("install package(s): {list}"),
+    }
+}
+
+fn install_hint(bin: &str) -> String {
+    install_command(&[bin])
+}
+
+/// Every external binary any test in `tests` needs, in first-seen order.
+pub fn all_binaries(deps: impl Iterator<Item = Vec<Dep>>) -> Vec<&'static str> {
+    let mut bins = Vec::new();
+    for list in deps {
+        for dep in list {
+            if let Dep::Bin(name) = dep
+                && !bins.contains(&name)
+            {
+                bins.push(name);
+            }
+        }
+    }
+    bins
 }
 
 /// Coarse distro family from `/etc/os-release`, used only for install hints.
@@ -147,4 +176,28 @@ fn distro_family() -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn install_command_collapses_packages() {
+        let cmd = install_command(&["mkfs.btrfs", "btrfs", "nvme", "fio"]);
+        assert!(cmd.ends_with("btrfs-progs nvme-cli fio"), "{cmd}");
+        assert_eq!(cmd.matches("btrfs-progs").count(), 1);
+    }
+
+    #[test]
+    fn all_binaries_dedupes_and_skips_non_binaries() {
+        let bins = all_binaries(
+            vec![
+                vec![Dep::Bin("fio"), Dep::Root],
+                vec![Dep::Bin("fio"), Dep::Bin("nvme")],
+            ]
+            .into_iter(),
+        );
+        assert_eq!(bins, vec!["fio", "nvme"]);
+    }
 }
