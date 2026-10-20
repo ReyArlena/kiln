@@ -8,6 +8,7 @@ pub const OK: Color = Color::Green;
 pub const WARN: Color = Color::Yellow;
 pub const BAD: Color = Color::Red;
 pub const INFO: Color = Color::Cyan;
+pub const BAR_BG: Color = Color::Rgb(30, 30, 36);
 
 pub fn title() -> Style {
     Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
@@ -29,6 +30,16 @@ pub fn border() -> Style {
 
 pub fn dim() -> Style {
     Style::default().fg(DIM)
+}
+
+/// Numeric values in the status bar and tables.
+pub fn number() -> Style {
+    Style::default().fg(INFO)
+}
+
+/// A red label block for warnings that must not be missed.
+pub fn badge_bad() -> Style {
+    Style::default().fg(Color::White).bg(BAD).add_modifier(Modifier::BOLD)
 }
 
 /// Secondary text that still has to be readable (field help, hints).

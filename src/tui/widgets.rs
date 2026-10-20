@@ -15,94 +15,64 @@ use super::input::{Hit, HitMap};
 use super::theme;
 
 /// The always-visible sensor bar. Uses the latest sample from the global sampler.
-pub fn draw_status_bar(
-    frame: &mut Frame,
-    area: Rect,
-    sample: Option<&Sample>,
-    config: &StatusBarConfig,
-    temp_cap: Option<f32>,
-    is_root: bool,
-    mem_total: u64,
-) {
-    let mut spans: Vec<Span> = vec![Span::styled(
-        format!(" kiln {} ", env!("CARGO_PKG_VERSION")),
-        theme::title(),
-    )];
+/// Numbers are padded to a fixed width so the bar does not jitter as values change.
+pub fn draw_status_bar(frame: &mut Frame, area: Rect, sample: Option<&Sample>, config: &StatusBarConfig, temp_cap: Option<f32>, is_root: bool, mem_total: u64) {
+    let mut spans: Vec<Span> = vec![Span::styled(format!(" kiln {} ", env!("CARGO_PKG_VERSION")), theme::title())];
     if !is_root {
         spans.push(Span::styled("not root ", Style::default().fg(theme::WARN)));
     }
+    let sep = || Span::styled("| ", theme::dim());
+    let number = |text: String| Span::styled(text, theme::number());
     if let Some(s) = sample {
-        let sep = || Span::styled(" | ", theme::dim());
-        if config.cpu_temp
-            && let Some(t) = s.primary_temp_c
-        {
+        if config.cpu_temp && let Some(t) = s.primary_temp_c {
             spans.push(sep());
             spans.push(Span::raw("CPU "));
-            spans.push(Span::styled(format!("{t:.0}C"), theme::temp(t, temp_cap)));
+            spans.push(Span::styled(format!("{:>3}C", t.round() as i32), theme::temp(t, temp_cap)));
         }
-        if config.cpu_usage
-            && let Some(p) = s.cpu_percent
-        {
-            spans.push(Span::raw(format!(" {p:.0}%")));
+        if config.cpu_usage && let Some(p) = s.cpu_percent {
+            spans.push(Span::raw(" "));
+            spans.push(number(format!("{:>3}%", p.round() as i32)));
         }
-        if config.cpu_freq
-            && let Some(f) = s.freq_mhz
-        {
-            spans.push(Span::raw(format!(" {:.1}GHz", f as f32 / 1000.0)));
+        if config.cpu_freq && let Some(f) = s.freq_mhz {
+            spans.push(Span::raw(" "));
+            spans.push(number(format!("{:>4.1}GHz", f as f32 / 1000.0)));
+        }
+        if config.cpu_temp || config.cpu_usage || config.cpu_freq {
+            spans.push(Span::raw(" "));
         }
         if config.memory && mem_total > 0 {
             spans.push(sep());
-            spans.push(Span::raw(format!(
-                "MEM {:.0}% ({})",
-                s.mem_used_bytes as f64 * 100.0 / mem_total as f64,
-                format_bytes(s.mem_used_bytes)
-            )));
+            spans.push(Span::raw("MEM "));
+            spans.push(number(format!("{:>3}%", (s.mem_used_bytes as f64 * 100.0 / mem_total as f64).round() as i32)));
+            spans.push(Span::raw(" ("));
+            spans.push(number(format!("{:>6}", format_bytes(s.mem_used_bytes))));
+            spans.push(Span::raw(") "));
         }
         if config.nvme_temp {
-            for (id, t) in s
-                .temps
-                .iter()
-                .filter(|(id, _)| id.starts_with("nvme/Composite"))
-            {
+            for (id, t) in s.temps.iter().filter(|(id, _)| id.starts_with("nvme") && id.ends_with("/Composite")) {
                 spans.push(sep());
-                spans.push(Span::raw(format!(
-                    "{} ",
-                    id.split('/').next().unwrap_or("nvme")
-                )));
-                spans.push(Span::styled(
-                    format!("{t:.0}C"),
-                    theme::temp(*t, Some(80.0)),
-                ));
+                spans.push(Span::raw(format!("{} ", id.split('/').next().unwrap_or("nvme").to_ascii_uppercase())));
+                spans.push(Span::styled(format!("{:>3}C ", t.round() as i32), theme::temp(*t, Some(80.0))));
             }
         }
         if config.gpu_temp {
-            for (_, t) in s
-                .temps
-                .iter()
-                .filter(|(id, _)| id == "amdgpu/edge" || id == "nouveau/temp1")
-            {
+            for (_, t) in s.temps.iter().filter(|(id, _)| id == "amdgpu/edge" || id == "nouveau/temp1") {
                 spans.push(sep());
                 spans.push(Span::raw("GPU "));
-                spans.push(Span::styled(
-                    format!("{t:.0}C"),
-                    theme::temp(*t, Some(95.0)),
-                ));
+                spans.push(Span::styled(format!("{:>3}C ", t.round() as i32), theme::temp(*t, Some(95.0))));
             }
         }
         for extra in &config.extra_sensors {
             if let Some((_, t)) = s.temps.iter().find(|(id, _)| id == extra) {
                 spans.push(sep());
-                spans.push(Span::raw(format!("{extra} {t:.0}C")));
+                spans.push(Span::raw(format!("{extra} ")));
+                spans.push(Span::styled(format!("{:>3}C ", t.round() as i32), theme::temp(*t, None)));
             }
         }
     } else {
         spans.push(Span::styled("| sensors warming up", theme::dim()));
     }
-    frame.render_widget(
-        Paragraph::new(Line::from(spans))
-            .style(Style::default().bg(ratatui::style::Color::Rgb(30, 30, 36))),
-        area,
-    );
+    frame.render_widget(Paragraph::new(Line::from(spans)).style(Style::default().bg(theme::BAR_BG)), area);
 }
 
 /// Bottom line of key hints. Each hint is clickable and acts like its key.
