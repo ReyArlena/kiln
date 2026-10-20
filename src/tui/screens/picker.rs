@@ -129,7 +129,14 @@ impl PickerScreen {
             }
             Action::NextPane => self.focus = self.next_pane(false),
             Action::PrevPane => self.focus = self.next_pane(true),
-            Action::Toggle => self.toggle(self.cursor),
+            // Space only toggles in the test list; on a plan it opens it like Enter.
+            Action::Toggle if self.focus == PANE_PLANS => {
+                return match self.plans.get(self.plan_cursor) {
+                    Some(plan) => vec![Effect::SetupPlan(Box::new(plan.clone()))],
+                    None => Vec::new(),
+                };
+            }
+            Action::Toggle if self.focus == PANE_LIST => self.toggle(self.cursor),
             Action::Char('a') => {
                 for (i, s) in self.selected.iter_mut().enumerate() {
                     *s = self.deps[i].all_ok();
