@@ -19,7 +19,8 @@ use super::theme;
 pub fn draw_status_bar(frame: &mut Frame, area: Rect, sample: Option<&Sample>, config: &StatusBarConfig, temp_cap: Option<f32>, is_root: bool, mem_total: u64) {
     let mut spans: Vec<Span> = vec![Span::styled(format!(" kiln {} ", env!("CARGO_PKG_VERSION")), theme::title())];
     if !is_root {
-        spans.push(Span::styled("not root ", Style::default().fg(theme::WARN)));
+        spans.push(Span::styled(" not root ", theme::badge_bad()));
+        spans.push(Span::raw(" "));
     }
     let sep = || Span::styled("| ", theme::dim());
     let number = |text: String| Span::styled(text, theme::number());
