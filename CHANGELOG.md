@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings in `~/.config/kiln`, runs in `~/.local/share/kiln`, resolved from the invoking user when run through sudo.
 - `install.sh` with `--uninstall` and `--purge`.
 - Dashboard banner with spinner, test position and progress.
+- Dashboard graphs one row per series: CPU temperature always, plus what the test declares (core frequency, NVMe temperature of the target drive, hash throughput).
 - Launch popup explaining which tests need root.
 - GitHub Actions: CI (fmt, clippy, tests) and a release workflow that attaches a static musl binary to `v*` tags.
 
@@ -27,3 +28,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Status bar: fixed-width coloured values, red `not root` badge, NVMe drives named per controller.
 - Log panes wrap long lines; temperature graph fills from the right and spans 30C to the cap.
 - Screen title line removed; toasts now appear in the top-right corner.
+- Temperatures show a degree symbol; the header shows the active cap as `CPU 40°C/70°C` while a run is going; the dashboard clock stops when a test ends.
