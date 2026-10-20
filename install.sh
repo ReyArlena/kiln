@@ -1,23 +1,50 @@
 #!/bin/sh
-# Installs (or removes) kiln for the current user from the latest GitHub release.
+# Installs (or removes) kiln from the latest GitHub release.
 #
-#   curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sudo sh   # system-wide
+#   curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh        # this user only
 #   sh install.sh --uninstall     # remove the binary
 #   sh install.sh --purge         # remove the binary, settings and run history
 #
-# Installs a prebuilt static binary to ~/.local/bin (override with KILN_BIN_DIR).
+# Run as root it installs to /usr/local/bin, so plain `sudo kiln` works (sudo
+# ignores your PATH and only searches system directories). Run as a normal
+# user it installs to ~/.local/bin and kiln must be given by full path under
+# sudo. Override the location with KILN_BIN_DIR.
 # To build from source instead, see the Develop section of the README.
 set -e
 
 REPO="ReyArlena/kiln"
-BIN_DIR="${KILN_BIN_DIR:-$HOME/.local/bin}"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/kiln"
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/kiln"
+if [ -n "$KILN_BIN_DIR" ]; then
+    BIN_DIR="$KILN_BIN_DIR"
+elif [ "$(id -u)" = "0" ]; then
+    BIN_DIR="/usr/local/bin"
+else
+    BIN_DIR="$HOME/.local/bin"
+fi
+
+# Settings live in the invoking user's home even when run through sudo.
+if [ -n "$SUDO_USER" ] && [ "$(id -u)" = "0" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+    USER_HOME="$HOME"
+fi
+CONFIG_DIR="${XDG_CONFIG_HOME:-$USER_HOME/.config}/kiln"
+DATA_DIR="${XDG_DATA_HOME:-$USER_HOME/.local/share}/kiln"
 
 case "$1" in
     --uninstall|--purge)
-        rm -f "$BIN_DIR/kiln"
-        echo "Removed $BIN_DIR/kiln"
+        # Remove whichever installs exist. The system one needs root.
+        removed=0
+        for bin in "$BIN_DIR/kiln" "$HOME/.local/bin/kiln" "$USER_HOME/.local/bin/kiln" /usr/local/bin/kiln; do
+            [ -f "$bin" ] || continue
+            if rm -f "$bin" 2>/dev/null; then
+                echo "Removed $bin"
+                removed=1
+            else
+                echo "Could not remove $bin (rerun with sudo)" >&2
+            fi
+        done
+        [ "$removed" = "1" ] || echo "kiln was not installed"
         if [ "$1" = "--purge" ]; then
             rm -rf "$CONFIG_DIR" "$DATA_DIR"
             echo "Removed $CONFIG_DIR and $DATA_DIR"
@@ -72,7 +99,14 @@ case ":$PATH:" in
     *) echo "Note: $BIN_DIR is not on your PATH" ;;
 esac
 echo
-echo "Most tests need root. sudo resets PATH, so run it by full path:"
-echo "  sudo $BIN_DIR/kiln"
+if [ "$BIN_DIR" = "/usr/local/bin" ]; then
+    echo "Most tests need root:"
+    echo "  sudo kiln"
+else
+    echo "Most tests need root. sudo ignores your PATH, so run it by full path:"
+    echo "  sudo $BIN_DIR/kiln"
+    echo "Or install system-wide so plain 'sudo kiln' works:"
+    echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sudo sh"
+fi
 echo
 echo "Prefer to compile it yourself? See the Develop section of the README."

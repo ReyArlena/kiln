@@ -24,10 +24,20 @@ Hardware burn-in and diagnostics runner for Linux. Pick tests, set guards such a
 ## Install
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sudo sh
+```
+
+Downloads the prebuilt static binary for your architecture (x86_64 or aarch64) from the latest release. No compiler needed.
+
+With `sudo` it installs to `/usr/local/bin`, so `sudo kiln` just works. Without `sudo` it installs to `~/.local/bin` for your user only:
+
+```sh
 curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh
 ```
 
-Downloads the prebuilt static binary for your architecture (x86_64 or aarch64) from the latest release into `~/.local/bin/kiln`. No compiler needed. Uninstall with `sh install.sh --uninstall` (or `--purge` to also delete settings and history). To build it yourself instead, see [Develop](#develop).
+Why the difference matters: most tests need root, and `sudo` ignores your `PATH`. It only searches system directories (`/usr/local/bin`, `/usr/bin`, ...), so a per-user install has to be launched as `sudo ~/.local/bin/kiln`. Settings and results go to your own home either way, never root's.
+
+Uninstall with `sh install.sh --uninstall` (or `--purge` to also delete settings and history), with `sudo` if it was installed system-wide. To build it yourself instead, see [Develop](#develop).
 
 Tools the tests call, on Arch:
 
@@ -39,12 +49,12 @@ sudo pacman -S stress-ng fio nvme-cli smartmontools btrfs-progs
 
 ## Use
 
-Most tests need root. `sudo` resets `PATH`, so give the full path:
-
 ```sh
-sudo ~/.local/bin/kiln            # TUI
-sudo ~/.local/bin/kiln doctor     # tools, sensors, permissions
+sudo kiln            # TUI
+sudo kiln doctor     # tools, sensors, permissions
 ```
+
+(Per-user install: `sudo ~/.local/bin/kiln`.)
 
 Headless:
 
