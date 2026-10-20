@@ -26,6 +26,9 @@ use super::screens::{Effect, Screen};
 use super::theme;
 use super::widgets::{Modal, draw_help, draw_status_bar};
 
+/// Longest wait for a running test to stop before exiting regardless.
+const EXIT_WAIT: Duration = Duration::from_secs(30);
+
 /// How the TUI ended.
 pub enum Exit {
     Quit,
@@ -51,6 +54,8 @@ pub struct App {
     run_dir: PathBuf,
     toast: Option<(String, Instant)>,
     exit: Option<Exit>,
+    /// An exit that is waiting for the running test to stop first.
+    pending_exit: Option<(Exit, Instant)>,
 }
 
 impl App {
@@ -87,6 +92,7 @@ impl App {
             run_dir: PathBuf::new(),
             toast: None,
             exit: None,
+            pending_exit: None,
             state,
         }
     }
@@ -103,14 +109,45 @@ impl App {
         let interval = Duration::from_millis(self.state.config.sample_interval_ms.max(200));
         tokio::spawn(sampler.run(interval, Instant::now(), sample_tx, stop_rx));
 
+        // Terminal closed or process asked to terminate: treat as quit.
+        let mut hangup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+
         let mut redraw = tokio::time::interval(Duration::from_millis(250));
         loop {
-            terminal.draw(|frame| self.draw(frame))?;
+            // Once the terminal is gone drawing fails; keep going anyway so a
+            // running test is still stopped cleanly.
+            if let Err(e) = terminal.draw(|frame| self.draw(frame))
+                && self.run.is_none()
+            {
+                return Err(e.into());
+            }
             if let Some(exit) = self.exit.take() {
-                return Ok(exit);
+                if self.run.is_some() {
+                    // Stop the test first so results are written; the runner
+                    // escalates to SIGKILL on its own if the test ignores SIGINT.
+                    if let Some(run) = &self.run {
+                        run.cancel(CancelScope::Run);
+                    }
+                    self.pending_exit = Some((exit, Instant::now()));
+                } else {
+                    return Ok(exit);
+                }
+            }
+            if let Some((_, since)) = &self.pending_exit
+                && (self.run.is_none() || since.elapsed() > EXIT_WAIT)
+            {
+                return Ok(self
+                    .pending_exit
+                    .take()
+                    .map(|(exit, _)| exit)
+                    .unwrap_or(Exit::Quit));
             }
             tokio::select! {
                 Some(event) = input.recv() => self.on_terminal_event(event),
+                _ = hangup.recv() => self.exit = Some(Exit::Quit),
+                _ = terminate.recv() => self.exit = Some(Exit::Quit),
                 Some(Event::Sample(sample)) = sample_rx.recv() => self.latest_sample = Some(sample),
                 event = recv_run_event(&mut self.run) => {
                     match event {
@@ -370,6 +407,12 @@ impl App {
             Screen::Settings => self.settings.draw(frame, body, &self.state, &mut self.hits),
         }
 
+        if self.pending_exit.is_some() {
+            self.toast = Some((
+                "stopping the running test, then exiting...".into(),
+                Instant::now(),
+            ));
+        }
         if let Some((text, when)) = &self.toast {
             if when.elapsed() < Duration::from_secs(5) {
                 let width = (text.chars().count() as u16 + 2).min(area.width);

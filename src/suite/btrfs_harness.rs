@@ -160,7 +160,10 @@ D=$1; SRC=$2; SCRUBS=$3; COMPARE=$4
 M=$(mktemp -d /tmp/kiln-harness.XXXXXX)
 cleanup() { umount "$M" 2>/dev/null; rmdir "$M" 2>/dev/null; }
 trap cleanup EXIT
-trap 'echo "harness interrupted"; exit 130' INT TERM
+# Long steps run in the background with `wait`, so a signal interrupts them
+# immediately instead of after they finish.
+child=""
+trap 'echo "harness interrupted"; [ -n "$child" ] && kill "$child" 2>/dev/null; exit 130' INT TERM
 
 echo "harness start device=$D source=$SRC scrubs=$SCRUBS"
 wipefs -a "$D" >/dev/null || { echo "WIPEFS_FAIL"; exit 1; }
@@ -169,7 +172,8 @@ mount -o compress=zstd:1,ssd "$D" "$M" || { echo "MOUNT_FAIL"; exit 1; }
 
 t0=$(date +%s)
 echo "copy start"
-cp -a "$SRC" "$M/tree" 2>"$M/.cp_err"; cp_rc=$?
+cp -a "$SRC" "$M/tree" 2>"$M/.cp_err" & child=$!
+wait "$child"; cp_rc=$?; child=""
 err_lines=$(wc -l < "$M/.cp_err"); rm -f "$M/.cp_err"
 sync
 t1=$(date +%s)
@@ -180,7 +184,9 @@ echo 3 > /proc/sys/vm/drop_caches
 
 total_errors=0
 for i in $(seq 1 "$SCRUBS"); do
-  out=$(btrfs scrub start -B "$M" 2>&1)
+  btrfs scrub start -B "$M" >"$M/.scrub_out" 2>&1 & child=$!
+  wait "$child"; child=""
+  out=$(cat "$M/.scrub_out")
   errs=$(echo "$out" | grep -E "Error summary" | grep -oE "[0-9]+" | paste -sd+ - | bc 2>/dev/null || echo 0)
   [ -z "$errs" ] && errs=0
   echo "$out" | grep -E "Error summary|Corrected|Uncorrectable|Total to scrub" | sed "s/^/scrub $i: /"

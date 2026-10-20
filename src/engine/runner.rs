@@ -579,6 +579,20 @@ fn spawn_job(
                 .kill_on_drop(true);
             // Own process group so SIGINT reaches every worker the tool forks.
             cmd.process_group(0);
+            // If kiln dies for any reason (SIGKILL included) the kernel sends the
+            // child SIGTERM, so a test never outlives the app.
+            // SAFETY: only async-signal-safe calls run between fork and exec.
+            unsafe {
+                cmd.pre_exec(|| {
+                    nix::sys::prctl::set_pdeathsig(Signal::SIGTERM)
+                        .map_err(std::io::Error::from)?;
+                    // The parent may already be gone by the time this runs.
+                    if nix::unistd::getppid().as_raw() == 1 {
+                        return Err(std::io::Error::other("parent exited before exec"));
+                    }
+                    Ok(())
+                });
+            }
             let mut child = cmd.spawn().with_context(|| format!("spawning {program}"))?;
             let pgid = Pid::from_raw(child.id().map(|id| id as i32).unwrap_or(0));
             let _ = line_tx.send(format!("kiln: exec {program} {}", args.join(" ")));

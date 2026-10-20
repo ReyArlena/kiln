@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Tests never outlive kiln: children get SIGTERM from the kernel if kiln dies (including SIGKILL), quitting or losing the terminal (SIGHUP/SIGTERM) stops the running test and still writes `run.json`, and the btrfs harness interrupts its copy and scrub immediately.
+
 - Status bar: fixed-width coloured values, red `not root` badge, NVMe drives named per controller.
 - Log panes wrap long lines; temperature graph fills from the right and spans 30C to the cap.
 - Screen title line removed; toasts now appear in the top-right corner.

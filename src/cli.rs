@@ -351,10 +351,19 @@ async fn run(state: &AppState, args: RunArgs) -> Result<i32> {
     let mut handle = start_run(plan, ctx);
 
     // Ctrl-C stops the current test; a second Ctrl-C stops the whole run.
+    // A hangup (terminal closed) or SIGTERM stops the run and still waits for
+    // the test to exit so run.json is complete.
     let ctrl_c_count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let mut sample_count = 0usize;
+    let mut hangup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     loop {
         tokio::select! {
+            _ = hangup.recv() => handle.cancel(crate::engine::runner::CancelScope::Run),
+            _ = terminate.recv() => {
+                eprintln!("\nterminated, stopping run");
+                handle.cancel(crate::engine::runner::CancelScope::Run);
+            }
             event = handle.events.recv() => {
                 let Some(event) = event else { break };
                 print_event(&event, args.verbose, &mut sample_count);
