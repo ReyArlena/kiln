@@ -20,6 +20,7 @@ use super::Effect;
 const PANE_LOG: usize = 0;
 const PANE_DMESG: usize = 1;
 const MAX_LINES: usize = 3000;
+const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 /// Bottom of the temperature sparkline, in Celsius.
 const SPARK_FLOOR_C: u64 = 30;
 
@@ -48,6 +49,8 @@ pub struct DashboardScreen {
     log_scroll: usize,
     dmesg_scroll: usize,
     finished: bool,
+    /// Redraw counter, drives the spinner.
+    tick: usize,
 }
 
 impl DashboardScreen {
@@ -84,6 +87,7 @@ impl DashboardScreen {
             log_scroll: 0,
             dmesg_scroll: 0,
             finished: false,
+            tick: 0,
         }
     }
 
@@ -255,9 +259,60 @@ impl DashboardScreen {
         Vec::new()
     }
 
+    /// Full-width state line: spinner, RUNNING/FINISHED, test name, progress.
+    fn draw_banner(&mut self, frame: &mut Frame, area: Rect) {
+        self.tick = self.tick.wrapping_add(1);
+        let elapsed = format_duration_secs(self.started.elapsed().as_secs());
+        let (label, style, detail) = if self.finished {
+            let failed = self.tests.iter().filter(|t| t.status != "PASS").count();
+            let summary = if failed == 0 {
+                "all passed".to_string()
+            } else {
+                format!("{failed} not passed")
+            };
+            (
+                "FINISHED".to_string(),
+                theme::status(if failed == 0 { "PASS" } else { "FAIL" }),
+                summary,
+            )
+        } else {
+            let spinner = SPINNER[self.tick % SPINNER.len()];
+            let progress = match (self.cooldown_left, self.expected_secs) {
+                (Some(left), _) => format!("cooldown {left}s"),
+                (None, Some(exp)) if exp > 0 => {
+                    format!("{elapsed} / {}", format_duration_secs(exp))
+                }
+                _ => format!("{elapsed} elapsed"),
+            };
+            let position = self
+                .current
+                .map(|i| format!("{} of {}", i + 1, self.tests.len()))
+                .unwrap_or_default();
+            (
+                format!("{spinner} RUNNING"),
+                theme::status("RUNNING"),
+                format!("{}   {position}   {progress}", self.current_name),
+            )
+        };
+        let block = pane_block("", false).border_style(style);
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        let line = Line::from(vec![
+            Span::styled(format!(" {label} "), style),
+            Span::raw("  "),
+            Span::raw(detail),
+        ]);
+        frame.render_widget(Paragraph::new(line), inner);
+    }
+
     pub fn draw(&mut self, frame: &mut Frame, area: Rect, hits: &mut HitMap) {
-        let [body, hints] =
-            Layout::vertical([Constraint::Min(5), Constraint::Length(1)]).areas(area);
+        let [banner, body, hints] = Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Min(5),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+        self.draw_banner(frame, banner);
         let [top, bottom] =
             Layout::vertical([Constraint::Length(9), Constraint::Min(5)]).areas(body);
         let [tests_area, progress_area] =
@@ -336,16 +391,28 @@ impl DashboardScreen {
             gauge_area,
         );
 
-        let [spark_area, temp_label] = Layout::horizontal([Constraint::Min(10), Constraint::Length(22)]).areas(temp_area);
+        let [spark_area, temp_label] =
+            Layout::horizontal([Constraint::Min(10), Constraint::Length(22)]).areas(temp_area);
         let width = spark_area.width as usize;
         // Show 30C..cap rather than 0..cap so a few degrees of movement is visible,
         // and pad the left so the newest reading always sits at the right edge.
         let floor = SPARK_FLOOR_C;
-        let ceiling = self.temp_cap.map(|c| c as u64).unwrap_or(100).max(floor + 10);
+        let ceiling = self
+            .temp_cap
+            .map(|c| c as u64)
+            .unwrap_or(100)
+            .max(floor + 10);
         let recent = self.temps.iter().rev().take(width).rev();
-        let mut data: Vec<Option<u64>> = vec![None; width.saturating_sub(self.temps.len().min(width))];
+        let mut data: Vec<Option<u64>> =
+            vec![None; width.saturating_sub(self.temps.len().min(width))];
         data.extend(recent.map(|t| Some(t.saturating_sub(floor).min(ceiling - floor))));
-        frame.render_widget(Sparkline::default().data(data).max(ceiling - floor).style(Style::default().fg(theme::ACCENT)), spark_area);
+        frame.render_widget(
+            Sparkline::default()
+                .data(data)
+                .max(ceiling - floor)
+                .style(Style::default().fg(theme::ACCENT)),
+            spark_area,
+        );
         let temp_text = match self.latest_temp {
             Some(t) => Line::from(vec![
                 Span::raw(" CPU "),
@@ -420,8 +487,19 @@ impl DashboardScreen {
 
 /// Tail view of a line buffer. Long lines wrap to the pane width, and
 /// `scroll` counts wrapped (screen) lines up from the end.
-pub fn draw_log(frame: &mut Frame, area: Rect, title: &str, lines: &VecDeque<String>, scroll: usize, focused: bool) {
-    let title = if scroll > 0 { format!("{title} (scrolled {scroll})") } else { title.to_string() };
+pub fn draw_log(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    lines: &VecDeque<String>,
+    scroll: usize,
+    focused: bool,
+) {
+    let title = if scroll > 0 {
+        format!("{title} (scrolled {scroll})")
+    } else {
+        title.to_string()
+    };
     let block = pane_block(&title, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);

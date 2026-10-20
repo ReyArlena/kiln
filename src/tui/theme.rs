@@ -39,7 +39,10 @@ pub fn number() -> Style {
 
 /// A red label block for warnings that must not be missed.
 pub fn badge_bad() -> Style {
-    Style::default().fg(Color::White).bg(BAD).add_modifier(Modifier::BOLD)
+    Style::default()
+        .fg(Color::White)
+        .bg(BAD)
+        .add_modifier(Modifier::BOLD)
 }
 
 /// Short-lived notice in the corner.

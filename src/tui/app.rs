@@ -320,11 +320,23 @@ impl App {
         self.hits.clear();
         let area = frame.area();
         let show_bar = self.state.config.status_bar.enabled;
-        let [bar, body] = Layout::vertical([Constraint::Length(if show_bar { 1 } else { 0 }), Constraint::Min(3)]).areas(area);
+        let [bar, body] = Layout::vertical([
+            Constraint::Length(if show_bar { 1 } else { 0 }),
+            Constraint::Min(3),
+        ])
+        .areas(area);
 
         if show_bar {
             let cap = self.state.config.guards.temp_max_c;
-            draw_status_bar(frame, bar, self.latest_sample.as_ref(), &self.state.config.status_bar, cap, self.state.is_root(), self.state.env.mem_total_bytes);
+            draw_status_bar(
+                frame,
+                bar,
+                self.latest_sample.as_ref(),
+                &self.state.config.status_bar,
+                cap,
+                self.state.is_root(),
+                self.state.env.mem_total_bytes,
+            );
         }
 
         match self.screen {
@@ -341,7 +353,13 @@ impl App {
                 let width = (text.chars().count() as u16 + 2).min(area.width);
                 let rect = Rect::new(area.x + area.width - width, body.y, width, 1);
                 frame.render_widget(Clear, rect);
-                frame.render_widget(Paragraph::new(Line::from(Span::styled(format!(" {text} "), theme::toast()))), rect);
+                frame.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        format!(" {text} "),
+                        theme::toast(),
+                    ))),
+                    rect,
+                );
             } else {
                 self.toast = None;
             }
