@@ -31,6 +31,11 @@ pub fn dim() -> Style {
     Style::default().fg(DIM)
 }
 
+/// Secondary text that still has to be readable (field help, hints).
+pub fn help() -> Style {
+    Style::default().fg(Color::Gray)
+}
+
 pub fn key() -> Style {
     Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
 }

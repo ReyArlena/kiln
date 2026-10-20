@@ -532,7 +532,7 @@ impl SetupScreen {
                             format!(" {err}"),
                             Style::default().fg(theme::BAD),
                         )),
-                        None => spans.push(Span::styled(format!(" {help}"), theme::dim())),
+                        None => spans.push(Span::styled(format!(" {help}"), theme::help())),
                     }
                     let mut line = Line::from(spans);
                     if is_cursor {
