@@ -294,7 +294,8 @@ impl PickerScreen {
             let info = test.info();
             let ok = self.deps[i].all_ok();
             let mark = if self.selected[i] { "[x]" } else { "[ ]" };
-            let mut style = if i == self.cursor {
+            // One highlight at a time: the list whose item the Details pane shows.
+            let mut style = if i == self.cursor && self.focus != PANE_PLANS {
                 theme::selected()
             } else {
                 Style::default()
