@@ -19,6 +19,9 @@ use crate::report;
 #[command(
     name = "kiln",
     version,
+    // `--version` names the repository so an installed binary can always be
+    // traced back to its source (`strings kiln | grep github` works too).
+    long_version = concat!(env!("CARGO_PKG_VERSION"), "\n", env!("CARGO_PKG_REPOSITORY")),
     about = "Hardware burn-in and diagnostics runner"
 )]
 pub struct Cli {

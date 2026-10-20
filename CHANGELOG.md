@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `kiln --version` prints the repository URL under the version so an installed binary can be traced back to its source.
+
 ## [0.1.0] - 2026-10-20
 
 First release.
