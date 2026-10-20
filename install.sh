@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs (or removes) kiln from the latest GitHub release.
 #
+#   curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh        # this user (default)
 #   curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sudo sh   # system-wide
-#   curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh        # this user only
 #   sh install.sh --uninstall     # remove the binary
 #   sh install.sh --purge         # remove the binary, settings and run history
 #
@@ -115,10 +115,8 @@ if [ "$BIN_DIR" = "/usr/local/bin" ]; then
     echo "Most tests need root:"
     echo "  sudo kiln"
 else
-    echo "Most tests need root. sudo usually drops ~/.local/bin from PATH, so run it by full path:"
-    echo "  sudo $BIN_DIR/kiln"
-    echo "Or install system-wide so plain 'sudo kiln' works:"
-    echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sudo sh"
+    echo "Most tests need root. Run 'kiln' and it will offer to relaunch itself through sudo."
+    echo "Headless use: sudo $BIN_DIR/kiln run ..."
 fi
 echo
 echo "Prefer to compile it yourself? See the Develop section of the README."

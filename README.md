@@ -24,22 +24,14 @@ Hardware burn-in and diagnostics runner for Linux. Pick tests, set guards such a
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sudo sh
-```
-
-Downloads the prebuilt static binary for your architecture (x86_64 or aarch64) from the latest release. No compiler needed.
-
-With `sudo` it installs to `/usr/local/bin`, so `sudo kiln` just works. Without `sudo` it installs to `~/.local/bin` for your user only:
-
-```sh
 curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh
 ```
 
-Why the difference matters: most tests need root, and on most distros (Arch, Debian, Ubuntu, Fedora) `sudo` replaces your `PATH` with a fixed system list (`secure_path`: `/usr/local/bin`, `/usr/bin`, ...). A per-user install then has to be launched as `sudo ~/.local/bin/kiln`. Check with `sudo sh -c 'echo $PATH'`. Settings and results go to your own home either way, never root's.
+Downloads the prebuilt static binary for your architecture (x86_64 or aarch64) into `~/.local/bin/kiln`. No compiler, no root. Uninstall with `sh install.sh --uninstall`, or `--purge` to also delete settings and history. To build it yourself instead, see [Develop](#develop).
 
-> **Note:** you can still install without sudo and run the app as root by giving its full path, for example `sudo /home/rey/.local/bin/kiln` or `sudo /home/rey/Projects/kiln/target/release/kiln` for a local build. If you launch it without root, kiln tells you on startup which tests are disabled and offers to relaunch itself through `sudo` (press Enter and type your password), or prints the exact command if `sudo` is not available.
+Most tests need root. Just run `kiln`: it notices it is not root and offers to relaunch itself through `sudo`. Settings and results always go to your own home, never root's.
 
-Uninstall with `sh install.sh --uninstall` (or `--purge` to also delete settings and history), with `sudo` if it was installed system-wide. To build it yourself instead, see [Develop](#develop).
+> Prefer plain `sudo kiln` to work from any shell or script? Install system-wide instead: run the same line with `| sudo sh` and the binary goes to `/usr/local/bin`. On most distros `sudo` searches only system directories, which is why a per-user install needs the relaunch offer (or `sudo ~/.local/bin/kiln` by hand).
 
 Tools the tests call, on Arch:
 
@@ -52,11 +44,9 @@ sudo pacman -S stress-ng fio nvme-cli smartmontools btrfs-progs
 ## Use
 
 ```sh
-sudo kiln            # TUI
-sudo kiln doctor     # tools, sensors, permissions
+kiln            # TUI, offers to relaunch as root
+kiln doctor     # tools, sensors, permissions
 ```
-
-(Per-user install: `sudo ~/.local/bin/kiln`.)
 
 Headless:
 
@@ -64,7 +54,7 @@ Headless:
 kiln list                                              # tests and one-line summaries
 kiln info btrfs-harness                                # full description, parameters, deps
 kiln run cpu-stress ram-hash --set duration=20m --temp-max 88
-sudo kiln run fio-verify --set device=/dev/nvme1n1 --set size=20G --yes-destroy
+sudo ~/.local/bin/kiln run fio-verify --set device=/dev/nvme1n1 --set size=20G --yes-destroy
 kiln runs                                              # history
 kiln report 2026-10-20T17-07-07 > report.md
 kiln log 2026-10-20T17-07-07 1                         # log of test 1
