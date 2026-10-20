@@ -81,6 +81,7 @@ kiln list                                              # tests and one-line summ
 kiln info btrfs-harness                                # full description, parameters, deps
 kiln run cpu-stress ram-hash --set duration=20m --temp-max 88
 sudo ~/.local/bin/kiln run fio-verify --set device=/dev/nvme1n1 --set size=20G --yes-destroy
+kiln devices                                           # disks to pick from
 kiln runs                                              # history
 kiln report 2026-10-20T17-07-07 > report.md
 kiln compare 2026-10-20T17-07-07 2026-10-21T09-12-00     # metrics side by side with % change

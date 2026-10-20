@@ -45,6 +45,14 @@ pub fn badge_bad() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
+/// A green label block for reassurance (read-only, safe).
+pub fn badge_ok() -> Style {
+    Style::default()
+        .fg(Color::Black)
+        .bg(OK)
+        .add_modifier(Modifier::BOLD)
+}
+
 /// Short-lived notice in the corner.
 pub fn toast() -> Style {
     Style::default().fg(Color::Black).bg(INFO)

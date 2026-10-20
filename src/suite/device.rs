@@ -63,43 +63,13 @@ fn is_block_device(meta: &std::fs::Metadata) -> bool {
 
 /// `/dev/nvme0n1p2` is a partition of `/dev/nvme0n1`; `/dev/sda1` of `/dev/sda`.
 fn is_partition_of(candidate: &str, disk: &str) -> bool {
-    if !candidate.starts_with(disk) || candidate == disk {
-        return false;
+    match (candidate.strip_prefix("/dev/"), disk.strip_prefix("/dev/")) {
+        (Some(c), Some(d)) => crate::engine::devices::is_partition_name(c, d),
+        _ => false,
     }
-    let rest = &candidate[disk.len()..];
-    let rest = rest.strip_prefix('p').unwrap_or(rest);
-    !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit())
 }
 
-/// The whole disk behind `/`, resolved through sysfs so LUKS or LVM on top
-/// of it is not fooled by a mapper name.
-fn root_disk() -> Option<String> {
-    let mounts = read_trimmed("/proc/self/mounts")?;
-    let source = mounts
-        .lines()
-        .find(|l| l.split_whitespace().nth(1) == Some("/"))?
-        .split_whitespace()
-        .next()?
-        .to_string();
-    let canonical = std::fs::canonicalize(&source).ok()?;
-    let name = canonical.file_name()?.to_str()?.to_string();
-    let block = Path::new("/sys/class/block").join(&name);
-    // A partition's sysfs entry lives inside its parent disk's directory.
-    let real = std::fs::canonicalize(block).ok()?;
-    let parent = real.parent()?.file_name()?.to_str()?.to_string();
-    let disk = if Path::new("/sys/class/block")
-        .join(&parent)
-        .join("device")
-        .exists()
-        || parent.starts_with("nvme")
-        || parent.starts_with("sd")
-    {
-        parent
-    } else {
-        name
-    };
-    Some(format!("/dev/{disk}"))
-}
+use crate::engine::devices::root_disk;
 
 #[cfg(test)]
 mod tests {

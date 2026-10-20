@@ -14,7 +14,9 @@ use crate::engine::{Guards, ParamSet, Plan, PlanEntry};
 
 use super::super::input::{Action, Hit, HitMap};
 use super::super::theme;
-use super::super::widgets::{Modal, TextInput, clamp_scroll, draw_key_hints, pane_block};
+use super::super::widgets::{
+    Banner, Modal, PickItem, TextInput, clamp_scroll, draw_key_hints, pane_block,
+};
 use super::Effect;
 
 /// The form rows. Headings are not selectable.
@@ -207,7 +209,7 @@ impl SetupScreen {
             vec![("Enter", "apply"), ("Esc", "cancel edit")]
         } else {
             vec![
-                ("Enter", "edit / start"),
+                ("Enter", "edit / pick / start"),
                 ("Space", "toggle / cycle"),
                 ("r", "start run"),
                 ("w", "save as plan"),
@@ -294,8 +296,12 @@ impl SetupScreen {
                 if matches!(self.rows[self.cursor], Row::Start) {
                     return self.start(state);
                 }
+                if let Some(effect) = self.device_picker() {
+                    return vec![effect];
+                }
                 self.begin_edit();
             }
+            Action::Char('e') => self.begin_edit(),
             Action::Char('r') => return self.start(state),
             Action::Char('w') => {
                 return vec![Effect::Modal(Modal::input(
@@ -336,6 +342,82 @@ impl SetupScreen {
                 matches!(spec.kind, ParamKind::Bool { .. } | ParamKind::Choice { .. })
             }
             _ => false,
+        }
+    }
+
+    /// For a device parameter, a popup listing the disks on this machine.
+    /// Destructive tests get a red warning and cannot pick mounted or system disks.
+    fn device_picker(&self) -> Option<Effect> {
+        let Row::Param { test, spec } = &self.rows[self.cursor] else {
+            return None;
+        };
+        let writes = match spec.kind {
+            ParamKind::BlockDevice => true,
+            ParamKind::ReadDevice => false,
+            _ => return None,
+        };
+        let devices = crate::engine::devices::list_block_devices();
+        let items: Vec<PickItem> = devices
+            .iter()
+            .map(|d| {
+                let disabled = if !writes {
+                    None
+                } else if d.is_system {
+                    Some("holds the running system".to_string())
+                } else if d.is_mounted() {
+                    Some("mounted, unmount first".to_string())
+                } else {
+                    None
+                };
+                PickItem {
+                    label: d.summary(),
+                    value: d.path.clone(),
+                    disabled,
+                }
+            })
+            .collect();
+        let test_name = self.tests[*test].name.clone();
+        let (title, body, banner) = if writes {
+            (
+                format!("Choose the device for {test_name}"),
+                "The device you choose is WIPED. Everything on it is lost, partitions included.
+You will be asked to type its name again before the run starts."
+                    .to_string(),
+                Banner::Danger("DESTRUCTIVE: this device will be erased".into()),
+            )
+        } else {
+            (
+                format!("Choose the device for {test_name}"),
+                "Nothing is written. Any disk is fine, including the one you booted from."
+                    .to_string(),
+                Banner::Safe("Read-only: no data is modified".into()),
+            )
+        };
+        let body = if items.is_empty() {
+            format!(
+                "{body}
+
+No disks found under /sys/class/block."
+            )
+        } else {
+            body
+        };
+        Some(Effect::Modal(Modal::pick(
+            &title,
+            &body,
+            banner,
+            items,
+            "pick-device",
+        )))
+    }
+
+    /// Called after the device picker confirms.
+    pub fn set_device(&mut self, device: &str) {
+        if let Row::Param { test, spec } = &self.rows[self.cursor]
+            && let Ok(value) = spec.parse(device)
+        {
+            self.tests[*test].values.insert(spec.key.to_string(), value);
+            self.errors[self.cursor] = None;
         }
     }
 
@@ -609,6 +691,12 @@ impl SetupScreen {
                         _ => String::new(),
                     };
                     let help = match row {
+                        Row::Param { spec, .. } if matches!(spec.kind, ParamKind::BlockDevice) => {
+                            "WIPED. Enter: choose from a list, e: type a path".to_string()
+                        }
+                        Row::Param { spec, .. } if matches!(spec.kind, ParamKind::ReadDevice) => {
+                            "read-only. Enter: choose from a list, e: type a path".to_string()
+                        }
                         Row::Param { spec, .. } => spec.help.to_string(),
                         Row::Repeat { .. } => "Run this test this many times in a row".to_string(),
                         Row::Profile { .. } => "Space cycles saved parameter sets".to_string(),

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests: `cpu-stress`, `ram-stress`, `ram-hash`, `fio-verify`, `btrfs-harness`, `health-snapshot`.
 - Benchmarks: `cpu-bench` (single and all-thread units/s), `mem-bandwidth` (STREAM GB/s), `mem-latency` (pointer-chase ns), `disk-read` (fio read-only MB/s and IOPS). `kiln compare <run> <run>` puts two runs side by side with percentage change.
 - Safety: destructive tests refuse mounted devices and the system disk, need an explicit device, and require `--yes-destroy` (CLI) or a typed confirmation (TUI).
+- Device picker: Enter on a device field lists whole disks (model, size, bus, mount points, system disk). Destructive tests show a red banner and grey out mounted and system disks; read-only benchmarks show a green banner and accept any disk. `kiln devices` prints the same list.
 - Headless CLI: `doctor`, `list`, `info`, `run`, `runs`, `report`, `log`, `profile`, `config`.
 - TUI: test picker, setup form, live dashboard with temperature sparkline and kernel log, results, history with log viewer, settings with developer tools. Keyboard (arrows and h/j/k/l reserved for navigation) and mouse.
 - Persistent sensor status bar, configurable per item.

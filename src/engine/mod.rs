@@ -2,6 +2,7 @@
 //! any knowledge of how results are displayed.
 
 pub mod deps;
+pub mod devices;
 pub mod env;
 pub mod event;
 pub mod guards;

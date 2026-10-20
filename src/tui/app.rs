@@ -60,6 +60,8 @@ pub struct App {
     startup: std::collections::VecDeque<Modal>,
     /// Text from the last `Input` modal, read by the confirm handler.
     last_input: Option<String>,
+    /// Value from the last `Pick` modal, read by the confirm handler.
+    last_pick: Option<String>,
 }
 
 impl App {
@@ -103,6 +105,7 @@ impl App {
             pending_exit: None,
             startup,
             last_input: None,
+            last_pick: None,
             state,
         }
     }
@@ -184,6 +187,7 @@ impl App {
                 if let Some(confirmed) = outcome {
                     let tag = modal.tag.clone();
                     self.last_input = modal.input_value();
+                    self.last_pick = modal.picked_value();
                     self.modal = None;
                     if confirmed {
                         self.on_modal_confirmed(&tag);
@@ -293,6 +297,12 @@ impl App {
             "save-plan" => {
                 let name = self.last_input.take().unwrap_or_default();
                 self.setup.save_plan(&self.state, &name)
+            }
+            "pick-device" => {
+                if let Some(device) = self.last_pick.take() {
+                    self.setup.set_device(&device);
+                }
+                Vec::new()
             }
             "delete-run" => self.history.delete_current(&self.state),
             "reset-config" => vec![Effect::ResetConfig],

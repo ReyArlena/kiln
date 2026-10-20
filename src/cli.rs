@@ -42,6 +42,8 @@ pub enum Command {
     Info { test: String },
     /// Run tests headlessly, in order, and write results to the runs directory
     Run(RunArgs),
+    /// List whole disks with model, size, bus, mount points and the system disk
+    Devices,
     /// List built-in and saved plans
     Plans,
     /// List past runs, newest first
@@ -143,6 +145,15 @@ pub async fn run_cli(cli: Cli) -> Result<i32> {
         Command::List { full } => list(&state, full),
         Command::Info { test } => info(&state, &test),
         Command::Run(args) => run(&state, args).await,
+        Command::Devices => {
+            for d in crate::engine::devices::list_block_devices() {
+                println!("{}", d.summary());
+            }
+            println!(
+                "\nDestructive tests refuse mounted disks and the system disk. Read-only benchmarks accept any."
+            );
+            Ok(0)
+        }
         Command::Plans => plans(&state),
         Command::Runs => runs(&state),
         Command::Report { run } => {

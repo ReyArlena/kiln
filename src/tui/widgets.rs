@@ -207,6 +207,27 @@ pub enum ModalKind {
     Typed { expected: String, input: TextInput },
     /// Free text, Enter submits (non-empty), Esc cancels.
     Input { input: TextInput },
+    /// Choose one item from a list. Disabled items show why they cannot be picked.
+    Pick {
+        items: Vec<PickItem>,
+        cursor: usize,
+        banner: Banner,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PickItem {
+    pub label: String,
+    pub value: String,
+    /// `None` when selectable, otherwise the reason it is greyed out.
+    pub disabled: Option<String>,
+}
+
+/// The coloured notice above a pick list.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Banner {
+    Danger(String),
+    Safe(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -242,6 +263,31 @@ impl Modal {
             },
             tag: tag.into(),
             ..Self::message(title, body)
+        }
+    }
+
+    /// Pick one of `items`. The cursor starts on the first selectable one.
+    pub fn pick(title: &str, body: &str, banner: Banner, items: Vec<PickItem>, tag: &str) -> Self {
+        let cursor = items.iter().position(|i| i.disabled.is_none()).unwrap_or(0);
+        Self {
+            kind: ModalKind::Pick {
+                items,
+                cursor,
+                banner,
+            },
+            tag: tag.into(),
+            ..Self::message(title, body)
+        }
+    }
+
+    /// The value chosen in a `Pick` modal.
+    pub fn picked_value(&self) -> Option<String> {
+        match &self.kind {
+            ModalKind::Pick { items, cursor, .. } => items
+                .get(*cursor)
+                .filter(|i| i.disabled.is_none())
+                .map(|i| i.value.clone()),
+            _ => None,
         }
     }
 
@@ -320,26 +366,69 @@ impl Modal {
                     None
                 }
             },
+            ModalKind::Pick { items, cursor, .. } => match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => Some(false),
+                KeyCode::Enter => items
+                    .get(*cursor)
+                    .is_some_and(|i| i.disabled.is_none())
+                    .then_some(true),
+                KeyCode::Up | KeyCode::Char('k') => {
+                    *cursor = cursor.saturating_sub(1);
+                    None
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    *cursor = (*cursor + 1).min(items.len().saturating_sub(1));
+                    None
+                }
+                KeyCode::Home => {
+                    *cursor = 0;
+                    None
+                }
+                KeyCode::End => {
+                    *cursor = items.len().saturating_sub(1);
+                    None
+                }
+                _ => None,
+            },
         }
     }
 
     pub fn draw(&self, frame: &mut Frame, area: Rect) {
+        let item_width = match &self.kind {
+            ModalKind::Pick { items, banner, .. } => {
+                let banner_len = match banner {
+                    Banner::Danger(t) | Banner::Safe(t) => t.len(),
+                };
+                items
+                    .iter()
+                    .map(|i| {
+                        i.label.len() + i.disabled.as_ref().map(|d| d.len() + 3).unwrap_or(0) + 4
+                    })
+                    .max()
+                    .unwrap_or(0)
+                    .max(banner_len)
+            }
+            _ => 0,
+        };
         let width = (self
             .body
             .lines()
             .map(|l| l.len())
             .max()
             .unwrap_or(20)
-            .max(self.title.len()) as u16
+            .max(self.title.len())
+            .max(item_width) as u16
             + 6)
         .max(30)
         .min(area.width.saturating_sub(4).max(1));
         let body_lines = self.body.lines().count() as u16 + 2;
         // Lines beyond the body: a blank, then the key hints (Typed adds the prompt and input).
-        let extra = match self.kind {
+        let extra = match &self.kind {
             ModalKind::Message | ModalKind::Confirm => 0,
             ModalKind::Typed { .. } => 2,
             ModalKind::Input { .. } => 1,
+            // Banner, blank, items, blank, hint.
+            ModalKind::Pick { items, .. } => items.len() as u16 + 3,
         };
         let rect = centered(area, width, body_lines + extra + 2);
         frame.render_widget(Clear, rect);
@@ -379,6 +468,48 @@ impl Modal {
                 Span::styled("Esc", theme::key()),
                 Span::raw(" no"),
             ])),
+            ModalKind::Pick {
+                items,
+                cursor,
+                banner,
+            } => {
+                let (text, style) = match banner {
+                    Banner::Danger(t) => (t.clone(), theme::badge_bad()),
+                    Banner::Safe(t) => (t.clone(), theme::badge_ok()),
+                };
+                lines.insert(0, Line::from(Span::styled(format!(" {text} "), style)));
+                lines.insert(1, Line::from(""));
+                for (i, item) in items.iter().enumerate() {
+                    let marker = if i == *cursor { ">" } else { " " };
+                    let mut spans = vec![Span::raw(format!(" {marker} {}", item.label))];
+                    if let Some(why) = &item.disabled {
+                        spans.push(Span::styled(
+                            format!("   {why}"),
+                            Style::default().fg(theme::WARN),
+                        ));
+                    }
+                    let mut line = Line::from(spans);
+                    if i == *cursor {
+                        line = line.style(if item.disabled.is_some() {
+                            theme::selected().fg(theme::DIM)
+                        } else {
+                            theme::selected()
+                        });
+                    } else if item.disabled.is_some() {
+                        line = line.style(theme::dim());
+                    }
+                    lines.push(line);
+                }
+                lines.push(Line::from(""));
+                lines.push(Line::from(vec![
+                    Span::styled("j/k", theme::key()),
+                    Span::raw(" move   "),
+                    Span::styled("Enter", theme::key()),
+                    Span::raw(" choose   "),
+                    Span::styled("Esc", theme::key()),
+                    Span::raw(" cancel"),
+                ]));
+            }
             ModalKind::Input { input } => {
                 lines.push(input.line(true));
                 lines.push(Line::from(vec![
