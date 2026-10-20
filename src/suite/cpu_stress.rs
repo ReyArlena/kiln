@@ -17,7 +17,7 @@ impl CpuStress {
         Self {
             info: TestInfo {
                 id: "cpu-stress",
-                name: "CPU stress (verified)",
+                name: "CPU Stress & Verify",
                 tldr: "Heats the CPU with checked arithmetic. Catches cores that compute wrong under load or heat.",
                 description: "\
 Runs stress-ng with one CPU stressor per thread, cycling through every \

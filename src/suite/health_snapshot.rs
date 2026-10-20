@@ -18,7 +18,7 @@ impl HealthSnapshot {
         Self {
             info: TestInfo {
                 id: "health-snapshot",
-                name: "Health snapshot",
+                name: "Health Snapshot",
                 tldr: "Records SMART data, PCIe link speeds and kernel errors. Run it first and last to see what a session changed.",
                 description: "\
 Captures, for every NVMe controller, `nvme smart-log` (media errors, error \

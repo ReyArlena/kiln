@@ -23,7 +23,7 @@ fn picker_renders_at_common_and_tiny_sizes() {
     let mut terminal = Terminal::new(TestBackend::new(140, 40)).unwrap();
     terminal.draw(|f| app.draw_for_test(f)).unwrap();
     let text = buffer_text(terminal.backend());
-    assert!(text.contains("CPU stress (verified)"));
+    assert!(text.contains("CPU Stress & Verify"));
     assert!(text.contains("Details"));
 }
 

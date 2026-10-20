@@ -21,7 +21,7 @@ impl RamHash {
         Self {
             info: TestInfo {
                 id: "ram-hash",
-                name: "RAM hash loop",
+                name: "RAM Hash Loop",
                 tldr: "Hashes the same block of RAM over and over. A changing hash means data in memory is not stable.",
                 description: "\
 Allocates a buffer of the requested size, fills it with a deterministic \

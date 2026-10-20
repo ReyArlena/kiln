@@ -17,7 +17,7 @@ impl RamStress {
         Self {
             info: TestInfo {
                 id: "ram-stress",
-                name: "RAM stress (verified)",
+                name: "RAM Stress & Verify",
                 tldr: "Fills most of RAM with patterns and reads them back. Catches bad DIMMs, bad slots and unstable memory clocks.",
                 description: "\
 Runs stress-ng's vm stressor across several workers, each mapping a slice \

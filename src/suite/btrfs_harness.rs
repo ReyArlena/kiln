@@ -18,7 +18,7 @@ impl BtrfsHarness {
         Self {
             info: TestInfo {
                 id: "btrfs-harness",
-                name: "btrfs install harness",
+                name: "btrfs Install Harness",
                 tldr: "Mimics an OS install: format, copy thousands of files, scrub, compare. The fastest way to reproduce install-time corruption.",
                 description: "\
 Formats the device with btrfs (checksummed, zstd compressed), mounts it, \

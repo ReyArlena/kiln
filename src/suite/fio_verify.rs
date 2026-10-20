@@ -18,7 +18,7 @@ impl FioVerify {
         Self {
             info: TestInfo {
                 id: "fio-verify",
-                name: "fio write + verify",
+                name: "fio Write & Verify",
                 tldr: "Writes a drive with checksummed blocks then reads them back. Catches data corrupted on the way to or from the drive.",
                 description: "\
 Uses fio to write the chosen device with direct I/O (bypassing the page \
