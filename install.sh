@@ -6,10 +6,10 @@
 #   sh install.sh --uninstall     # remove the binary
 #   sh install.sh --purge         # remove the binary, settings and run history
 #
-# Run as root it installs to /usr/local/bin, so plain `sudo kiln` works (sudo
-# ignores your PATH and only searches system directories). Run as a normal
-# user it installs to ~/.local/bin and kiln must be given by full path under
-# sudo. Override the location with KILN_BIN_DIR.
+# Run as root it installs to /usr/local/bin, so plain `sudo kiln` works (most
+# distros give sudo a fixed secure_path that leaves out ~/.local/bin). Run as
+# a normal user it installs to ~/.local/bin and kiln must usually be given by
+# full path under sudo. Override the location with KILN_BIN_DIR.
 # To build from source instead, see the Develop section of the README.
 set -e
 
@@ -115,7 +115,7 @@ if [ "$BIN_DIR" = "/usr/local/bin" ]; then
     echo "Most tests need root:"
     echo "  sudo kiln"
 else
-    echo "Most tests need root. sudo ignores your PATH, so run it by full path:"
+    echo "Most tests need root. sudo usually drops ~/.local/bin from PATH, so run it by full path:"
     echo "  sudo $BIN_DIR/kiln"
     echo "Or install system-wide so plain 'sudo kiln' works:"
     echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sudo sh"

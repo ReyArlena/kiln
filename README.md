@@ -35,7 +35,7 @@ With `sudo` it installs to `/usr/local/bin`, so `sudo kiln` just works. Without 
 curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh
 ```
 
-Why the difference matters: most tests need root, and `sudo` ignores your `PATH`. It only searches system directories (`/usr/local/bin`, `/usr/bin`, ...), so a per-user install has to be launched as `sudo ~/.local/bin/kiln`. Settings and results go to your own home either way, never root's.
+Why the difference matters: most tests need root, and on most distros (Arch, Debian, Ubuntu, Fedora) `sudo` replaces your `PATH` with a fixed system list (`secure_path`: `/usr/local/bin`, `/usr/bin`, ...). A per-user install then has to be launched as `sudo ~/.local/bin/kiln`. Check with `sudo sh -c 'echo $PATH'`. Settings and results go to your own home either way, never root's.
 
 Uninstall with `sh install.sh --uninstall` (or `--purge` to also delete settings and history), with `sudo` if it was installed system-wide. To build it yourself instead, see [Develop](#develop).
 
