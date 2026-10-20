@@ -7,7 +7,6 @@ use anyhow::Result;
 use crossterm::event::{Event as TermEvent, KeyCode};
 use ratatui::DefaultTerminal;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use tokio::sync::{mpsc, watch};
@@ -55,6 +54,12 @@ pub struct App {
 impl App {
     pub fn new(state: AppState) -> Self {
         let picker = PickerScreen::new(&state);
+        let modal = (!state.is_root()).then(|| {
+            Modal::message(
+                "Not running as root",
+                &format!("Storage tests and some health captures need root.\nThey are greyed out in the list.\n\nTo enable them, quit and relaunch with:\n  {}", state.sudo_hint()),
+            )
+        });
         Self {
             screen: Screen::Picker,
             picker,
@@ -63,7 +68,7 @@ impl App {
             results: ResultsScreen::empty(),
             history: HistoryScreen::new(),
             settings: SettingsScreen::new(),
-            modal: None,
+            modal,
             help: false,
             hits: HitMap::default(),
             latest_sample: None,
@@ -315,48 +320,12 @@ impl App {
         self.hits.clear();
         let area = frame.area();
         let show_bar = self.state.config.status_bar.enabled;
-        let [bar, title_area, body] = Layout::vertical([
-            Constraint::Length(if show_bar { 1 } else { 0 }),
-            Constraint::Length(1),
-            Constraint::Min(3),
-        ])
-        .areas(area);
+        let [bar, body] = Layout::vertical([Constraint::Length(if show_bar { 1 } else { 0 }), Constraint::Min(3)]).areas(area);
 
         if show_bar {
             let cap = self.state.config.guards.temp_max_c;
-            draw_status_bar(
-                frame,
-                bar,
-                self.latest_sample.as_ref(),
-                &self.state.config.status_bar,
-                cap,
-                self.state.is_root(),
-                self.state.env.mem_total_bytes,
-            );
+            draw_status_bar(frame, bar, self.latest_sample.as_ref(), &self.state.config.status_bar, cap, self.state.is_root(), self.state.env.mem_total_bytes);
         }
-
-        // Screen title line, with the root warning and any toast.
-        let mut spans = vec![Span::styled(
-            format!(" {} ", self.screen.title()),
-            theme::title(),
-        )];
-        if !self.state.is_root() && matches!(self.screen, Screen::Picker | Screen::Setup) {
-            spans.push(Span::styled(
-                "  not root: storage tests disabled, relaunch with sudo kiln",
-                Style::default().fg(theme::WARN),
-            ));
-        }
-        if let Some((text, when)) = &self.toast {
-            if when.elapsed() < Duration::from_secs(5) {
-                spans.push(Span::styled(
-                    format!("   {text}"),
-                    Style::default().fg(theme::INFO),
-                ));
-            } else {
-                self.toast = None;
-            }
-        }
-        frame.render_widget(Paragraph::new(Line::from(spans)), title_area);
 
         match self.screen {
             Screen::Picker => self.picker.draw(frame, body, &self.state, &mut self.hits),
@@ -367,6 +336,16 @@ impl App {
             Screen::Settings => self.settings.draw(frame, body, &self.state, &mut self.hits),
         }
 
+        if let Some((text, when)) = &self.toast {
+            if when.elapsed() < Duration::from_secs(5) {
+                let width = (text.chars().count() as u16 + 2).min(area.width);
+                let rect = Rect::new(area.x + area.width - width, body.y, width, 1);
+                frame.render_widget(Clear, rect);
+                frame.render_widget(Paragraph::new(Line::from(Span::styled(format!(" {text} "), theme::toast()))), rect);
+            } else {
+                self.toast = None;
+            }
+        }
         if self.help {
             let keys = match self.screen {
                 Screen::Picker => self.picker.key_hints(),
@@ -381,8 +360,6 @@ impl App {
         if let Some(modal) = &self.modal {
             modal.draw(frame, area);
         }
-        let _ = Clear;
-        let _: Rect = area;
     }
 }
 

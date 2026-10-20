@@ -220,7 +220,8 @@ impl Modal {
             .unwrap_or(20)
             .max(self.title.len()) as u16
             + 6)
-        .clamp(30, area.width.saturating_sub(4));
+        .max(30)
+        .min(area.width.saturating_sub(4).max(1));
         let body_lines = self.body.lines().count() as u16 + 2;
         let extra = match self.kind {
             ModalKind::Message => 2,

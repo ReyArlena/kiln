@@ -24,19 +24,6 @@ pub enum Screen {
     Settings,
 }
 
-impl Screen {
-    pub fn title(self) -> &'static str {
-        match self {
-            Self::Picker => "Tests",
-            Self::Setup => "Setup",
-            Self::Dashboard => "Running",
-            Self::Results => "Results",
-            Self::History => "History",
-            Self::Settings => "Settings",
-        }
-    }
-}
-
 /// What a screen asks the app to do after handling an action.
 #[derive(Debug)]
 pub enum Effect {

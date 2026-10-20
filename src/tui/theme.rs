@@ -42,6 +42,11 @@ pub fn badge_bad() -> Style {
     Style::default().fg(Color::White).bg(BAD).add_modifier(Modifier::BOLD)
 }
 
+/// Short-lived notice in the corner.
+pub fn toast() -> Style {
+    Style::default().fg(Color::Black).bg(INFO)
+}
+
 /// Secondary text that still has to be readable (field help, hints).
 pub fn help() -> Style {
     Style::default().fg(Color::Gray)
