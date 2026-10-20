@@ -422,36 +422,45 @@ impl DashboardScreen {
     }
 }
 
-/// Tail view of a line buffer. `scroll` lines up from the end.
-pub fn draw_log(
-    frame: &mut Frame,
-    area: Rect,
-    title: &str,
-    lines: &VecDeque<String>,
-    scroll: usize,
-    focused: bool,
-) {
-    let title = if scroll > 0 {
-        format!("{title} (scrolled {scroll})")
-    } else {
-        title.to_string()
-    };
+/// Tail view of a line buffer. Long lines wrap to the pane width, and
+/// `scroll` counts wrapped (screen) lines up from the end.
+pub fn draw_log(frame: &mut Frame, area: Rect, title: &str, lines: &VecDeque<String>, scroll: usize, focused: bool) {
+    let title = if scroll > 0 { format!("{title} (scrolled {scroll})") } else { title.to_string() };
     let block = pane_block(&title, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
+    let width = inner.width.max(1) as usize;
     let visible = inner.height as usize;
-    let end = lines.len().saturating_sub(scroll);
+    // Only wrap as many logical lines as could possibly fill the pane plus the scroll.
+    let needed = visible + scroll;
+    let mut wrapped: Vec<Line> = Vec::new();
+    for text in lines.iter().rev() {
+        let pieces = wrap_line(text, width);
+        for piece in pieces.into_iter().rev() {
+            wrapped.push(style_log_line(&piece, text));
+        }
+        if wrapped.len() >= needed {
+            break;
+        }
+    }
+    wrapped.reverse();
+    let end = wrapped.len().saturating_sub(scroll);
     let start = end.saturating_sub(visible);
-    let shown: Vec<Line> = lines
-        .iter()
-        .skip(start)
-        .take(end - start)
-        .map(|l| style_log_line(l))
-        .collect();
-    frame.render_widget(Paragraph::new(shown), inner);
+    frame.render_widget(Paragraph::new(wrapped[start..end].to_vec()), inner);
 }
 
-fn style_log_line(text: &str) -> Line<'static> {
+/// Split a line into pieces no wider than `width` characters.
+fn wrap_line(text: &str, width: usize) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.is_empty() {
+        return vec![String::new()];
+    }
+    chars.chunks(width).map(|c| c.iter().collect()).collect()
+}
+
+/// Style a (possibly wrapped) piece using the whole original line for context.
+fn style_log_line(piece: &str, whole: &str) -> Line<'static> {
+    let text = whole;
     let lower = text.to_ascii_lowercase();
     let style = if lower.contains("fail")
         || lower.contains("error")
@@ -466,5 +475,17 @@ fn style_log_line(text: &str) -> Line<'static> {
     } else {
         Style::default()
     };
-    Line::from(Span::styled(text.to_string(), style))
+    Line::from(Span::styled(piece.to_string(), style))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_lines_wrap_and_empty_lines_survive() {
+        assert_eq!(wrap_line("abcdefgh", 3), vec!["abc", "def", "gh"]);
+        assert_eq!(wrap_line("", 3), vec![""]);
+        assert_eq!(wrap_line("ab", 10), vec!["ab"]);
+    }
 }
