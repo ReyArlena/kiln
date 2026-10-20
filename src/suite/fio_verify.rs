@@ -3,9 +3,7 @@
 use anyhow::Result;
 
 use crate::engine::params::{ParamKind, ParamSet, ParamSpec};
-use crate::engine::test::{
-    Category, GraphSpec, Job, JobKind, Outcome, Snapshot, Test, TestInfo, Verdict,
-};
+use crate::engine::test::{Category, Job, JobKind, Outcome, Snapshot, Test, TestInfo, Verdict};
 use crate::engine::util::format_bytes;
 use crate::engine::{Dep, EnvSnapshot};
 
@@ -138,7 +136,7 @@ impl Test for FioVerify {
                     "--eta=never".into(),
                 ],
             },
-            graphs: GraphSpec::nvme_temp_for(&device).into_iter().collect(),
+            graphs: vec![],
             expected_secs: None,
             snapshots,
             verdict: Box::new(verdict),

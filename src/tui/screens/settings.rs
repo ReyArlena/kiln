@@ -35,6 +35,17 @@ enum Item {
     BarMemory,
     BarNvme,
     BarGpu,
+    BarCpuPower,
+    BarGpuPower,
+    GraphCpuTemp,
+    GraphCpuUsage,
+    GraphCpuFreq,
+    GraphMemory,
+    GraphCpuPower,
+    GraphGpuPower,
+    GraphNvme,
+    GraphGpu,
+    GraphTestMetrics,
     DevReset,
     DevDeleteRuns,
     DevRestart,
@@ -63,6 +74,18 @@ const ITEMS: &[Item] = &[
     Item::BarMemory,
     Item::BarNvme,
     Item::BarGpu,
+    Item::BarCpuPower,
+    Item::BarGpuPower,
+    Item::Heading("Dashboard graphs"),
+    Item::GraphCpuTemp,
+    Item::GraphCpuUsage,
+    Item::GraphCpuFreq,
+    Item::GraphMemory,
+    Item::GraphCpuPower,
+    Item::GraphGpuPower,
+    Item::GraphNvme,
+    Item::GraphGpu,
+    Item::GraphTestMetrics,
     Item::Heading("Developer tools"),
     Item::DevReset,
     Item::DevDeleteRuns,
@@ -127,6 +150,17 @@ impl SettingsScreen {
             Item::BarMemory => "  Memory",
             Item::BarNvme => "  NVMe temperatures",
             Item::BarGpu => "  GPU temperature",
+            Item::BarCpuPower => "  CPU power (needs root)",
+            Item::BarGpuPower => "  GPU power",
+            Item::GraphCpuTemp => "  CPU temperature",
+            Item::GraphCpuUsage => "  CPU usage",
+            Item::GraphCpuFreq => "  CPU frequency",
+            Item::GraphMemory => "  Memory",
+            Item::GraphCpuPower => "  CPU power (needs root)",
+            Item::GraphGpuPower => "  GPU power",
+            Item::GraphNvme => "  NVMe temperatures",
+            Item::GraphGpu => "  GPU temperature",
+            Item::GraphTestMetrics => "  Test metrics (e.g. MB/s)",
             Item::DevReset => "Clear all settings (back to defaults)",
             Item::DevDeleteRuns => "Delete all run history",
             Item::DevRestart => "Restart app",
@@ -173,6 +207,17 @@ impl SettingsScreen {
             Item::BarMemory => yes_no(c.status_bar.memory),
             Item::BarNvme => yes_no(c.status_bar.nvme_temp),
             Item::BarGpu => yes_no(c.status_bar.gpu_temp),
+            Item::BarCpuPower => yes_no(c.status_bar.cpu_power),
+            Item::BarGpuPower => yes_no(c.status_bar.gpu_power),
+            Item::GraphCpuTemp => yes_no(c.graphs.cpu_temp),
+            Item::GraphCpuUsage => yes_no(c.graphs.cpu_usage),
+            Item::GraphCpuFreq => yes_no(c.graphs.cpu_freq),
+            Item::GraphMemory => yes_no(c.graphs.memory),
+            Item::GraphCpuPower => yes_no(c.graphs.cpu_power),
+            Item::GraphGpuPower => yes_no(c.graphs.gpu_power),
+            Item::GraphNvme => yes_no(c.graphs.nvme_temp),
+            Item::GraphGpu => yes_no(c.graphs.gpu_temp),
+            Item::GraphTestMetrics => yes_no(c.graphs.test_metrics),
             _ => String::new(),
         }
     }
@@ -202,6 +247,17 @@ impl SettingsScreen {
                 | Item::BarMemory
                 | Item::BarNvme
                 | Item::BarGpu
+                | Item::BarCpuPower
+                | Item::BarGpuPower
+                | Item::GraphCpuTemp
+                | Item::GraphCpuUsage
+                | Item::GraphCpuFreq
+                | Item::GraphMemory
+                | Item::GraphCpuPower
+                | Item::GraphGpuPower
+                | Item::GraphNvme
+                | Item::GraphGpu
+                | Item::GraphTestMetrics
         )
     }
 
@@ -281,6 +337,17 @@ impl SettingsScreen {
                 Item::BarMemory => c.status_bar.memory = !c.status_bar.memory,
                 Item::BarNvme => c.status_bar.nvme_temp = !c.status_bar.nvme_temp,
                 Item::BarGpu => c.status_bar.gpu_temp = !c.status_bar.gpu_temp,
+                Item::BarCpuPower => c.status_bar.cpu_power = !c.status_bar.cpu_power,
+                Item::BarGpuPower => c.status_bar.gpu_power = !c.status_bar.gpu_power,
+                Item::GraphCpuTemp => c.graphs.cpu_temp = !c.graphs.cpu_temp,
+                Item::GraphCpuUsage => c.graphs.cpu_usage = !c.graphs.cpu_usage,
+                Item::GraphCpuFreq => c.graphs.cpu_freq = !c.graphs.cpu_freq,
+                Item::GraphMemory => c.graphs.memory = !c.graphs.memory,
+                Item::GraphCpuPower => c.graphs.cpu_power = !c.graphs.cpu_power,
+                Item::GraphGpuPower => c.graphs.gpu_power = !c.graphs.gpu_power,
+                Item::GraphNvme => c.graphs.nvme_temp = !c.graphs.nvme_temp,
+                Item::GraphGpu => c.graphs.gpu_temp = !c.graphs.gpu_temp,
+                Item::GraphTestMetrics => c.graphs.test_metrics = !c.graphs.test_metrics,
                 Item::Sensor => {
                     // Cycle: auto, then each discovered sensor.
                     let next = match &c.sensor {

@@ -307,7 +307,15 @@ impl App {
     fn start_run(&mut self, plan: Plan) {
         let ctx = self.state.run_context();
         self.run_dir = ctx.run_dir.clone();
-        self.dashboard = DashboardScreen::new(&plan);
+        let sampler = self.state.sampler();
+        self.dashboard = DashboardScreen::new(
+            &plan,
+            &self.state.config.graphs,
+            &sampler.sensors,
+            sampler.has_cpu_power(),
+            sampler.has_gpu_power(),
+            self.state.env.mem_total_bytes,
+        );
         self.run = Some(start_run(plan, ctx));
         self.screen = Screen::Dashboard;
     }

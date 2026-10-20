@@ -4,9 +4,7 @@
 use anyhow::Result;
 
 use crate::engine::params::{ParamKind, ParamSet, ParamSpec};
-use crate::engine::test::{
-    Category, GraphSpec, Job, JobKind, Outcome, Snapshot, Test, TestInfo, Verdict,
-};
+use crate::engine::test::{Category, Job, JobKind, Outcome, Snapshot, Test, TestInfo, Verdict};
 use crate::engine::{Dep, EnvSnapshot};
 
 use super::device::check_destructive_target;
@@ -122,7 +120,6 @@ impl Test for BtrfsHarness {
 
     fn plan(&self, params: &ParamSet, _env: &EnvSnapshot) -> Result<Job> {
         let device = check_destructive_target(params["device"].as_str().unwrap_or(""))?;
-        let graphs = GraphSpec::nvme_temp_for(&device).into_iter().collect();
         let source = params["source"].as_str().unwrap_or("/usr").to_string();
         let scrubs = params["scrubs"].as_i64().unwrap_or(3);
         let compare = params["compare_files"].as_i64().unwrap_or(2000);
@@ -139,7 +136,7 @@ impl Test for BtrfsHarness {
                     compare.to_string(),
                 ],
             },
-            graphs,
+            graphs: vec![],
             expected_secs: None,
             snapshots: vec![Snapshot::new(
                 "dmesg-btrfs",

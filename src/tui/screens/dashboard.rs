@@ -5,10 +5,12 @@ use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Gauge, Paragraph, Sparkline, Wrap};
+use ratatui::widgets::{Gauge, Paragraph, Wrap};
 
+use crate::config::GraphsConfig;
+use crate::engine::sampler::SensorInfo;
 use crate::engine::test::{GraphSource, GraphSpec};
 use crate::engine::util::format_duration_secs;
 use crate::engine::{Event, Plan, Sample, Status};
@@ -26,8 +28,9 @@ const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 const TEMP_FLOOR_C: f64 = 30.0;
 /// Most points kept per graph.
 const MAX_POINTS: usize = 600;
-/// Width of the label column left of each graph.
-const GUTTER: u16 = 14;
+/// Width of the label column left of each graph, and the value column right of it.
+const GUTTER: u16 = 6;
+const VALUE_WIDTH: u16 = 8;
 
 /// One live graph: its spec plus the points collected so far.
 struct Series {
@@ -45,13 +48,15 @@ impl Series {
         }
     }
 
-    fn is_temperature(&self) -> bool {
-        matches!(self.spec.source, GraphSource::Sensor(_))
-    }
-
     /// Read this series' value from a sample and the latest metrics.
-    fn value_from(&self, sample: &Sample, metrics: &BTreeMap<String, f64>) -> Option<f64> {
+    fn value_from(
+        &self,
+        sample: &Sample,
+        metrics: &BTreeMap<String, f64>,
+        mem_total: u64,
+    ) -> Option<f64> {
         match &self.spec.source {
+            GraphSource::Sensor(id) if id == "primary" => sample.primary_temp_c.map(|t| t as f64),
             GraphSource::Sensor(id) => sample
                 .temps
                 .iter()
@@ -59,7 +64,40 @@ impl Series {
                 .map(|(_, t)| *t as f64),
             GraphSource::CpuFreq => sample.freq_mhz.map(|f| f as f64 / 1000.0),
             GraphSource::CpuPercent => sample.cpu_percent.map(|p| p as f64),
+            GraphSource::MemoryPercent => {
+                (mem_total > 0).then(|| sample.mem_used_bytes as f64 * 100.0 / mem_total as f64)
+            }
+            GraphSource::CpuPower => sample.cpu_power_w.map(|w| w as f64),
+            GraphSource::GpuPower => sample.gpu_power_w.map(|w| w as f64),
             GraphSource::Metric(key) => metrics.get(key).copied(),
+        }
+    }
+
+    /// The value range the graph is drawn over. Temperatures run from 30°C to
+    /// the cap, percentages 0 to 100, everything else 0 to the highest seen.
+    fn range(&self, temp_cap: Option<f32>) -> (f64, f64) {
+        match self.spec.source {
+            GraphSource::Sensor(_) => {
+                let cap = if self.spec.label == "CPU" {
+                    temp_cap.map(|c| c as f64)
+                } else {
+                    Some(85.0)
+                };
+                (TEMP_FLOOR_C, cap.unwrap_or(100.0).max(TEMP_FLOOR_C + 10.0))
+            }
+            GraphSource::CpuPercent | GraphSource::MemoryPercent => (0.0, 100.0),
+            GraphSource::CpuFreq
+            | GraphSource::CpuPower
+            | GraphSource::GpuPower
+            | GraphSource::Metric(_) => {
+                let max = self
+                    .points
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .fold(0.0_f64, f64::max);
+                (0.0, if max > 0.0 { max } else { 1.0 })
+            }
         }
     }
 
@@ -78,7 +116,8 @@ impl Series {
             (None, _) => "-".into(),
             (Some(v), GraphSource::Sensor(_)) => format!("{v:.0}°C"),
             (Some(v), GraphSource::CpuFreq) => format!("{v:.1}"),
-            (Some(v), GraphSource::CpuPercent) => format!("{v:.0}%"),
+            (Some(v), GraphSource::CpuPower | GraphSource::GpuPower) => format!("{v:.0}W"),
+            (Some(v), GraphSource::CpuPercent | GraphSource::MemoryPercent) => format!("{v:.0}%"),
             (Some(v), GraphSource::Metric(_)) => {
                 if v.fract() == 0.0 {
                     format!("{}", v as i64)
@@ -104,8 +143,12 @@ pub struct DashboardScreen {
     /// Set when the current test (or the run) ends so the clock stops.
     ended: Option<Instant>,
     expected_secs: Option<u64>,
-    /// CPU temperature first, then whatever the running test asked for.
+    /// The always-on component graphs first, then the running test's metrics.
     graphs: Vec<Series>,
+    /// How many of `graphs` are the always-on ones.
+    base_graphs: usize,
+    show_test_metrics: bool,
+    mem_total: u64,
     temp_cap: Option<f32>,
     metrics: BTreeMap<String, f64>,
     log: VecDeque<String>,
@@ -121,9 +164,50 @@ pub struct DashboardScreen {
     tick: usize,
 }
 
-/// The CPU package temperature, graphed for every test.
-fn cpu_temp_graph() -> GraphSpec {
-    GraphSpec::sensor("CPU", "primary")
+/// The always-on graphs, in display order, from settings and the sensors found.
+fn component_graphs(
+    config: &GraphsConfig,
+    sensors: &[SensorInfo],
+    has_cpu_power: bool,
+    has_gpu_power: bool,
+) -> Vec<GraphSpec> {
+    let mut graphs = Vec::new();
+    if config.cpu_temp {
+        graphs.push(GraphSpec::sensor("CPU", "primary"));
+    }
+    if config.cpu_usage {
+        graphs.push(GraphSpec::cpu_percent());
+    }
+    if config.cpu_freq {
+        graphs.push(GraphSpec::cpu_freq());
+    }
+    if config.memory {
+        graphs.push(GraphSpec::memory());
+    }
+    if config.cpu_power && has_cpu_power {
+        graphs.push(GraphSpec::cpu_power());
+    }
+    if config.gpu_power && has_gpu_power {
+        graphs.push(GraphSpec::gpu_power());
+    }
+    if config.nvme_temp {
+        let mut nvmes: Vec<&SensorInfo> = sensors
+            .iter()
+            .filter(|s| s.chip.starts_with("nvme") && s.label == "Composite")
+            .collect();
+        nvmes.sort_by(|a, b| a.chip.cmp(&b.chip));
+        for s in nvmes {
+            graphs.push(GraphSpec::sensor(&s.chip.to_ascii_uppercase(), &s.id()));
+        }
+    }
+    if config.gpu_temp
+        && let Some(s) = sensors
+            .iter()
+            .find(|s| s.id() == "amdgpu/edge" || s.id() == "nouveau/temp1")
+    {
+        graphs.push(GraphSpec::sensor("GPU", &s.id()));
+    }
+    graphs
 }
 
 impl DashboardScreen {
@@ -133,10 +217,24 @@ impl DashboardScreen {
     }
 
     pub fn empty() -> Self {
-        Self::new(&Plan::new("", Default::default()))
+        Self::new(
+            &Plan::new("", Default::default()),
+            &GraphsConfig::default(),
+            &[],
+            false,
+            false,
+            0,
+        )
     }
 
-    pub fn new(plan: &Plan) -> Self {
+    pub fn new(
+        plan: &Plan,
+        config: &GraphsConfig,
+        sensors: &[SensorInfo],
+        has_cpu_power: bool,
+        has_gpu_power: bool,
+        mem_total: u64,
+    ) -> Self {
         let mut tests = Vec::new();
         for entry in &plan.tests {
             for _ in 0..entry.repeat.max(1) {
@@ -147,6 +245,10 @@ impl DashboardScreen {
                 });
             }
         }
+        let graphs: Vec<Series> = component_graphs(config, sensors, has_cpu_power, has_gpu_power)
+            .into_iter()
+            .map(Series::new)
+            .collect();
         Self {
             tests,
             current: None,
@@ -154,7 +256,10 @@ impl DashboardScreen {
             started: Instant::now(),
             ended: None,
             expected_secs: None,
-            graphs: vec![Series::new(cpu_temp_graph())],
+            base_graphs: graphs.len(),
+            graphs,
+            show_test_metrics: config.test_metrics,
+            mem_total,
             temp_cap: plan.guards.temp_max_c,
             metrics: BTreeMap::new(),
             log: VecDeque::new(),
@@ -197,9 +302,12 @@ impl DashboardScreen {
                 self.started = Instant::now();
                 self.ended = None;
                 self.expected_secs = *expected_secs;
-                // Keep the CPU history across tests; swap the rest for this test's picks.
-                self.graphs.truncate(1);
-                self.graphs.extend(graphs.iter().cloned().map(Series::new));
+                // Component graphs keep their history across tests; the test's own
+                // metric series are replaced.
+                self.graphs.truncate(self.base_graphs);
+                if self.show_test_metrics {
+                    self.graphs.extend(graphs.iter().cloned().map(Series::new));
+                }
                 self.metrics.clear();
                 self.trip = None;
                 self.cooldown_left = None;
@@ -243,12 +351,8 @@ impl DashboardScreen {
                 }
             }
             Event::Sample(s) => {
-                for (i, series) in self.graphs.iter_mut().enumerate() {
-                    let value = if i == 0 {
-                        s.primary_temp_c.map(|t| t as f64)
-                    } else {
-                        series.value_from(s, &self.metrics)
-                    };
+                for series in &mut self.graphs {
+                    let value = series.value_from(s, &self.metrics, self.mem_total);
                     series.push(value);
                 }
             }
@@ -543,65 +647,105 @@ impl DashboardScreen {
     }
 }
 
-/// One graph row: label and latest value in the gutter, sparkline filling the rest,
-/// newest point at the right edge.
+/// One graph row: label on the left, braille graph in the middle, latest
+/// value on the right. Colour runs green to yellow to red as the value
+/// climbs through the series' range, like btop.
 fn draw_series(frame: &mut Frame, row: Rect, series: &Series, temp_cap: Option<f32>) {
-    let [gutter, graph] =
-        Layout::horizontal([Constraint::Length(GUTTER), Constraint::Min(1)]).areas(row);
-    let value_style = match (series.is_temperature(), series.latest) {
-        (true, Some(v)) => theme::temp(
-            v as f32,
-            if series.spec.label == "CPU" {
-                temp_cap
-            } else {
-                Some(80.0)
-            },
-        ),
-        _ => theme::number(),
-    };
-    let label = Line::from(vec![
-        Span::styled(format!("{:<5}", series.spec.label), theme::dim()),
-        Span::styled(format!("{:>7} ", series.label_value()), value_style),
-    ]);
-    frame.render_widget(Paragraph::new(label), gutter);
+    let [gutter, graph, value_area] = Layout::horizontal([
+        Constraint::Length(GUTTER),
+        Constraint::Min(1),
+        Constraint::Length(VALUE_WIDTH),
+    ])
+    .areas(row);
+    let (floor, ceiling) = series.range(temp_cap);
+    let normalise = |v: f64| ((v - floor) / (ceiling - floor)).clamp(0.0, 1.0);
 
-    // Scale every series to 0..1000 so one sparkline call fits all of them.
-    let (floor, ceiling) = match series.spec.source {
-        GraphSource::Sensor(_) => {
-            let cap = if series.spec.label == "CPU" {
-                temp_cap.map(|c| c as f64)
-            } else {
-                Some(85.0)
-            };
-            (TEMP_FLOOR_C, cap.unwrap_or(100.0).max(TEMP_FLOOR_C + 10.0))
-        }
-        GraphSource::CpuPercent => (0.0, 100.0),
-        GraphSource::CpuFreq | GraphSource::Metric(_) => {
-            let max = series
-                .points
-                .iter()
-                .flatten()
-                .copied()
-                .fold(0.0_f64, f64::max);
-            (0.0, if max > 0.0 { max } else { 1.0 })
-        }
-    };
-    let width = graph.width as usize;
-    let recent = series.points.iter().rev().take(width).rev();
-    let mut data: Vec<Option<u64>> =
-        vec![None; width.saturating_sub(series.points.len().min(width))];
-    data.extend(
-        recent.map(|p| {
-            p.map(|v| (((v - floor) / (ceiling - floor)).clamp(0.0, 1.0) * 1000.0) as u64)
-        }),
-    );
     frame.render_widget(
-        Sparkline::default()
-            .data(data)
-            .max(1000)
-            .style(Style::default().fg(theme::ACCENT)),
-        graph,
+        Paragraph::new(Span::styled(
+            format!("{:<width$}", series.spec.label, width = GUTTER as usize),
+            theme::dim(),
+        )),
+        gutter,
     );
+
+    // Two points per cell: the braille left and right dot columns.
+    let cells = graph.width as usize;
+    let needed = cells * 2;
+    let recent: Vec<Option<f64>> = series
+        .points
+        .iter()
+        .rev()
+        .take(needed)
+        .rev()
+        .copied()
+        .collect();
+    let mut points: Vec<Option<f64>> = vec![None; needed.saturating_sub(recent.len())];
+    points.extend(recent.into_iter().map(|p| p.map(normalise)));
+    let spans: Vec<Span> = points
+        .chunks(2)
+        .map(|pair| {
+            let left = pair.first().copied().flatten();
+            let right = pair.get(1).copied().flatten();
+            let symbol = braille_cell(left, right);
+            let level = left
+                .into_iter()
+                .chain(right)
+                .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v))));
+            Span::styled(
+                symbol.to_string(),
+                Style::default().fg(level.map(gradient).unwrap_or(theme::DIM)),
+            )
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(Line::from(spans)), graph);
+
+    let value_style = Style::default().fg(series
+        .latest
+        .map(|v| gradient(normalise(v)))
+        .unwrap_or(theme::DIM));
+    frame.render_widget(
+        Paragraph::new(Span::styled(
+            format!(
+                "{:>width$}",
+                series.label_value(),
+                width = VALUE_WIDTH as usize
+            ),
+            value_style,
+        )),
+        value_area,
+    );
+}
+
+/// Braille dot bits for the left and right columns, bottom row first.
+const LEFT_DOTS: [u32; 4] = [0x40, 0x04, 0x02, 0x01];
+const RIGHT_DOTS: [u32; 4] = [0x80, 0x20, 0x10, 0x08];
+
+/// A braille character whose two columns are filled from the bottom to the
+/// given levels (0.0 to 1.0). `None` leaves a column empty.
+fn braille_cell(left: Option<f64>, right: Option<f64>) -> char {
+    let mut bits = 0x2800u32;
+    for (value, dots) in [(left, LEFT_DOTS), (right, RIGHT_DOTS)] {
+        let Some(v) = value else { continue };
+        // At least one dot once a value exists, so a flat zero line still shows.
+        let filled = ((v * 4.0).round() as usize).clamp(1, 4);
+        for dot in dots.iter().take(filled) {
+            bits |= dot;
+        }
+    }
+    char::from_u32(bits).unwrap_or(' ')
+}
+
+/// Green at 0, yellow at 0.5, red at 1.
+fn gradient(t: f64) -> Color {
+    let t = t.clamp(0.0, 1.0);
+    let (r, g) = if t < 0.5 {
+        let k = t / 0.5;
+        ((60.0 + (235.0 - 60.0) * k) as u8, 200u8)
+    } else {
+        let k = (t - 0.5) / 0.5;
+        (235u8, (200.0 - (200.0 - 60.0) * k) as u8)
+    };
+    Color::Rgb(r, g, 60)
 }
 
 /// Tail view of a line buffer. Long lines wrap to the pane width, and
@@ -674,6 +818,19 @@ fn style_log_line(piece: &str, whole: &str) -> Line<'static> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn braille_cells_fill_from_the_bottom() {
+        assert_eq!(braille_cell(None, None), '\u{2800}');
+        assert_eq!(braille_cell(Some(1.0), Some(1.0)), '\u{28ff}');
+        // Bottom dot only on the left column.
+        assert_eq!(braille_cell(Some(0.1), None), '\u{2840}');
+        // Two dots left, all four right.
+        assert_eq!(
+            braille_cell(Some(0.5), Some(1.0)),
+            char::from_u32(0x2800 | 0x40 | 0x04 | 0xF8).unwrap()
+        );
+    }
 
     #[test]
     fn long_lines_wrap_and_empty_lines_survive() {

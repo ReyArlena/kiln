@@ -20,6 +20,38 @@ pub enum SensorChoice {
 }
 
 /// The always-visible sensor bar in the TUI.
+/// Which graphs the dashboard shows. All on by default.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GraphsConfig {
+    pub cpu_temp: bool,
+    pub cpu_usage: bool,
+    pub cpu_freq: bool,
+    pub memory: bool,
+    pub nvme_temp: bool,
+    pub gpu_temp: bool,
+    pub cpu_power: bool,
+    pub gpu_power: bool,
+    /// Series the running test reports itself, e.g. MB/s.
+    pub test_metrics: bool,
+}
+
+impl Default for GraphsConfig {
+    fn default() -> Self {
+        Self {
+            cpu_temp: true,
+            cpu_usage: true,
+            cpu_freq: true,
+            memory: true,
+            nvme_temp: true,
+            gpu_temp: true,
+            cpu_power: true,
+            gpu_power: true,
+            test_metrics: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StatusBarConfig {
@@ -36,6 +68,10 @@ pub struct StatusBarConfig {
     pub nvme_temp: bool,
     /// GPU edge temperature when an amdgpu/nouveau sensor exists.
     pub gpu_temp: bool,
+    /// CPU package watts (RAPL, root only on most kernels).
+    pub cpu_power: bool,
+    /// GPU watts when the driver reports them.
+    pub gpu_power: bool,
     /// Any other sensor ids (`chip/label`) to show, e.g. `k10temp/Tccd1`.
     pub extra_sensors: Vec<String>,
 }
@@ -50,6 +86,8 @@ impl Default for StatusBarConfig {
             memory: true,
             nvme_temp: true,
             gpu_temp: false,
+            cpu_power: true,
+            gpu_power: true,
             extra_sensors: Vec::new(),
         }
     }
@@ -71,6 +109,7 @@ pub struct AppConfig {
     /// How many past runs to keep on disk. Zero keeps everything.
     pub runs_to_keep: usize,
     pub status_bar: StatusBarConfig,
+    pub graphs: GraphsConfig,
 }
 
 impl Default for AppConfig {
@@ -83,6 +122,7 @@ impl Default for AppConfig {
             confirm_destructive: true,
             runs_to_keep: 50,
             status_bar: StatusBarConfig::default(),
+            graphs: GraphsConfig::default(),
         }
     }
 }

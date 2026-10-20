@@ -67,7 +67,13 @@ pub fn draw_status_bar(
             spans.push(Span::raw(" "));
             spans.push(number(format!("{:>4.1}GHz", f as f32 / 1000.0)));
         }
-        if config.cpu_temp || config.cpu_usage || config.cpu_freq {
+        if config.cpu_power
+            && let Some(w) = s.cpu_power_w
+        {
+            spans.push(Span::raw(" "));
+            spans.push(number(format!("{:>3}W", w.round() as i32)));
+        }
+        if config.cpu_temp || config.cpu_usage || config.cpu_freq || config.cpu_power {
             spans.push(Span::raw(" "));
         }
         if config.memory && mem_total > 0 {

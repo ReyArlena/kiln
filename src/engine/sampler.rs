@@ -112,6 +112,10 @@ pub struct Sample {
     /// One-minute load average.
     pub load1: f32,
     pub mem_used_bytes: u64,
+    /// CPU package power from RAPL, watts. Needs root on most kernels.
+    pub cpu_power_w: Option<f32>,
+    /// GPU power from its hwmon `power1_input`, watts.
+    pub gpu_power_w: Option<f32>,
 }
 
 /// Reads sensors on demand. Cheap to clone; holds only paths.
@@ -121,6 +125,12 @@ pub struct Sampler {
     pub primary: Option<SensorInfo>,
     /// `(busy, total)` jiffies from the previous read, for CPU percentage.
     prev_cpu: Option<(u64, u64)>,
+    /// RAPL package energy counter, when readable.
+    rapl_energy: Option<PathBuf>,
+    /// Energy (microjoules) and time of the previous read, for CPU watts.
+    prev_energy: Option<(u64, Instant)>,
+    /// GPU hwmon power input, when present.
+    gpu_power: Option<PathBuf>,
 }
 
 impl Sampler {
@@ -131,6 +141,9 @@ impl Sampler {
             sensors,
             primary,
             prev_cpu: None,
+            rapl_energy: find_rapl_package(),
+            prev_energy: None,
+            gpu_power: find_gpu_power(),
         }
     }
 
@@ -148,7 +161,34 @@ impl Sampler {
             cpu_percent: self.cpu_percent(),
             load1: load_average(),
             mem_used_bytes: mem_used_bytes(),
+            cpu_power_w: self.cpu_power_w(),
+            gpu_power_w: self
+                .gpu_power
+                .as_ref()
+                .and_then(|p| read_trimmed(p)?.parse::<f64>().ok())
+                .map(|uw| (uw / 1_000_000.0) as f32),
         }
+    }
+
+    /// Average package power since the last read, from the RAPL energy counter.
+    fn cpu_power_w(&mut self) -> Option<f32> {
+        let path = self.rapl_energy.as_ref()?;
+        let energy_uj: u64 = read_trimmed(path)?.parse().ok()?;
+        let now = Instant::now();
+        let previous = self.prev_energy.replace((energy_uj, now))?;
+        let secs = now.duration_since(previous.1).as_secs_f64();
+        if secs <= 0.0 || energy_uj < previous.0 {
+            return None; // counter wrapped
+        }
+        Some(((energy_uj - previous.0) as f64 / 1_000_000.0 / secs) as f32)
+    }
+
+    pub fn has_cpu_power(&self) -> bool {
+        self.rapl_energy.is_some()
+    }
+
+    pub fn has_gpu_power(&self) -> bool {
+        self.gpu_power.is_some()
     }
 
     /// Busy share of all CPUs since the last call. `None` on the first call.
@@ -208,6 +248,39 @@ fn average_cpu_freq_mhz() -> Option<u32> {
         }
     }
     (count > 0).then(|| (total_khz / count / 1000) as u32)
+}
+
+/// The RAPL package energy counter, only if this process can read it
+/// (kernels make it root-only).
+fn find_rapl_package() -> Option<PathBuf> {
+    let zones = std::fs::read_dir("/sys/class/powercap").ok()?;
+    let mut candidates: Vec<PathBuf> = zones
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| read_trimmed(p.join("name")).is_some_and(|n| n.starts_with("package")))
+        .map(|p| p.join("energy_uj"))
+        .filter(|p| std::fs::read_to_string(p).is_ok())
+        .collect();
+    candidates.sort();
+    candidates.into_iter().next()
+}
+
+/// `power1_input` (or `power1_average`) of a GPU hwmon chip, in microwatts.
+fn find_gpu_power() -> Option<PathBuf> {
+    let chips = std::fs::read_dir("/sys/class/hwmon").ok()?;
+    for dir in chips.flatten().map(|e| e.path()) {
+        let name = read_trimmed(dir.join("name")).unwrap_or_default();
+        if name != "amdgpu" && name != "nouveau" && name != "nvidia" {
+            continue;
+        }
+        for file in ["power1_input", "power1_average"] {
+            let path = dir.join(file);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+    None
 }
 
 /// `(busy, total)` jiffies from the aggregate line of `/proc/stat`.

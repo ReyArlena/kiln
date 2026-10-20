@@ -107,6 +107,8 @@ mod tests {
             cpu_percent: None,
             load1: 0.0,
             mem_used_bytes: 0,
+            cpu_power_w: None,
+            gpu_power_w: None,
         }
     }
 

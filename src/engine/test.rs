@@ -77,6 +77,12 @@ pub enum GraphSource {
     CpuFreq,
     /// Overall CPU busy percentage.
     CpuPercent,
+    /// Used memory as a percentage of total.
+    MemoryPercent,
+    /// CPU package watts.
+    CpuPower,
+    /// GPU watts.
+    GpuPower,
     /// The latest value of a parsed metric, sampled each tick.
     Metric(String),
 }
@@ -103,28 +109,33 @@ impl GraphSpec {
         }
     }
 
-    /// Composite temperature of the NVMe controller behind a block device,
-    /// e.g. `/dev/nvme1n1p2` gives `nvme1`. `None` for non-NVMe devices.
-    pub fn nvme_temp_for(device: &str) -> Option<Self> {
-        let name = device.trim_start_matches("/dev/");
-        if !name.starts_with("nvme") {
-            return None;
+    pub fn cpu_percent() -> Self {
+        Self {
+            label: "CPU%".into(),
+            source: GraphSource::CpuPercent,
         }
-        let controller = nvme_controller(name);
-        Some(Self::sensor(
-            &controller.to_ascii_uppercase(),
-            &format!("{controller}/Composite"),
-        ))
     }
-}
 
-/// `nvme1n1p2` -> `nvme1`.
-fn nvme_controller(name: &str) -> String {
-    let digits: String = name["nvme".len()..]
-        .chars()
-        .take_while(|c| c.is_ascii_digit())
-        .collect();
-    format!("nvme{digits}")
+    pub fn memory() -> Self {
+        Self {
+            label: "MEM".into(),
+            source: GraphSource::MemoryPercent,
+        }
+    }
+
+    pub fn cpu_power() -> Self {
+        Self {
+            label: "CPU W".into(),
+            source: GraphSource::CpuPower,
+        }
+    }
+
+    pub fn gpu_power() -> Self {
+        Self {
+            label: "GPU W".into(),
+            source: GraphSource::GpuPower,
+        }
+    }
 }
 
 /// What the runner actually executes for one test.
@@ -218,14 +229,6 @@ pub fn parse_kiln_metric(line: &str) -> Vec<(String, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn nvme_graph_resolves_the_controller() {
-        let g = GraphSpec::nvme_temp_for("/dev/nvme1n1p2").unwrap();
-        assert_eq!(g.label, "NVME1");
-        assert_eq!(g.source, GraphSource::Sensor("nvme1/Composite".into()));
-        assert!(GraphSpec::nvme_temp_for("/dev/sda").is_none());
-    }
 
     #[test]
     fn kiln_metric_lines_parse() {
