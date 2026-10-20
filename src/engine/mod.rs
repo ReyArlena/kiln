@@ -24,4 +24,4 @@ pub use registry::Registry;
 pub use result::{Run, Status, TestResult};
 pub use runner::{RunHandle, start_run};
 pub use sampler::{Sample, SensorInfo};
-pub use test::{Job, JobKind, Snapshot, Test, TestInfo};
+pub use test::{GraphSource, GraphSpec, Job, JobKind, Snapshot, Test, TestInfo};

@@ -3,6 +3,7 @@
 use super::guards::Trip;
 use super::result::{Run, TestResult};
 use super::sampler::Sample;
+use super::test::GraphSpec;
 
 #[derive(Debug, Clone)]
 pub enum Event {
@@ -12,6 +13,7 @@ pub enum Event {
         test_id: String,
         name: String,
         expected_secs: Option<u64>,
+        graphs: Vec<GraphSpec>,
     },
     /// A line of stdout/stderr from the job.
     Line {

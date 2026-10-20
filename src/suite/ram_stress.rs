@@ -3,7 +3,7 @@
 use anyhow::Result;
 
 use crate::engine::params::{ParamKind, ParamSet, ParamSpec};
-use crate::engine::test::{Category, Job, JobKind, Test, TestInfo};
+use crate::engine::test::{Category, GraphSpec, Job, JobKind, Test, TestInfo};
 use crate::engine::{Dep, EnvSnapshot};
 
 use super::stress_ng;
@@ -119,6 +119,7 @@ impl Test for RamStress {
                     "--log-brief".into(),
                 ],
             },
+            graphs: vec![GraphSpec::cpu_freq()],
             expected_secs: Some(duration),
             snapshots: vec![],
             verdict: Box::new(stress_ng::verdict),

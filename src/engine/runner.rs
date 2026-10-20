@@ -175,6 +175,7 @@ async fn run_plan(
                 test_id: test_id.clone(),
                 name: name.clone(),
                 expected_secs: job.expected_secs,
+                graphs: job.graphs.clone(),
             });
 
             let log_name = format!("{index:02}-{test_id}.log");

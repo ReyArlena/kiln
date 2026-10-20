@@ -6,7 +6,9 @@ use anyhow::{Result, bail};
 use sha2::{Digest, Sha256};
 
 use crate::engine::params::{ParamKind, ParamSet, ParamSpec};
-use crate::engine::test::{BuiltinCtx, Category, Job, JobKind, Outcome, Test, TestInfo, Verdict};
+use crate::engine::test::{
+    BuiltinCtx, Category, GraphSpec, Job, JobKind, Outcome, Test, TestInfo, Verdict,
+};
 use crate::engine::util::format_bytes;
 use crate::engine::{Dep, EnvSnapshot};
 
@@ -95,6 +97,7 @@ impl Test for RamHash {
         }
         Ok(Job {
             kind: JobKind::Builtin(Box::new(move |ctx| Box::pin(hash_loop(ctx, size, passes)))),
+            graphs: vec![GraphSpec::metric("MB/s", "mb_per_sec")],
             expected_secs: None,
             snapshots: vec![],
             verdict: Box::new(verdict),

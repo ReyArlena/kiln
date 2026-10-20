@@ -60,9 +60,78 @@ pub type VerdictFn = Box<dyn Fn(&Outcome) -> Verdict + Send + Sync>;
 /// Extracts metrics from one line of output.
 pub type ParserFn = Box<dyn Fn(&str) -> Vec<(String, f64)> + Send + Sync>;
 
+/// A series the dashboard should graph while a test runs. The CPU package
+/// temperature is always graphed; tests add what else matters to them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphSpec {
+    /// Short gutter label, e.g. `NVME1` or `MB/s`.
+    pub label: String,
+    pub source: GraphSource,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GraphSource {
+    /// A hwmon sensor by id, e.g. `nvme1/Composite`.
+    Sensor(String),
+    /// Average core frequency in GHz.
+    CpuFreq,
+    /// Overall CPU busy percentage.
+    CpuPercent,
+    /// The latest value of a parsed metric, sampled each tick.
+    Metric(String),
+}
+
+impl GraphSpec {
+    pub fn sensor(label: &str, id: &str) -> Self {
+        Self {
+            label: label.into(),
+            source: GraphSource::Sensor(id.into()),
+        }
+    }
+
+    pub fn metric(label: &str, key: &str) -> Self {
+        Self {
+            label: label.into(),
+            source: GraphSource::Metric(key.into()),
+        }
+    }
+
+    pub fn cpu_freq() -> Self {
+        Self {
+            label: "GHz".into(),
+            source: GraphSource::CpuFreq,
+        }
+    }
+
+    /// Composite temperature of the NVMe controller behind a block device,
+    /// e.g. `/dev/nvme1n1p2` gives `nvme1`. `None` for non-NVMe devices.
+    pub fn nvme_temp_for(device: &str) -> Option<Self> {
+        let name = device.trim_start_matches("/dev/");
+        if !name.starts_with("nvme") {
+            return None;
+        }
+        let controller = nvme_controller(name);
+        Some(Self::sensor(
+            &controller.to_ascii_uppercase(),
+            &format!("{controller}/Composite"),
+        ))
+    }
+}
+
+/// `nvme1n1p2` -> `nvme1`.
+fn nvme_controller(name: &str) -> String {
+    let digits: String = name["nvme".len()..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    format!("nvme{digits}")
+}
+
 /// What the runner actually executes for one test.
 pub struct Job {
     pub kind: JobKind,
+    /// Extra series for the live dashboard, besides CPU temperature.
+    pub graphs: Vec<GraphSpec>,
     /// Rough expected duration, used for progress bars only.
     pub expected_secs: Option<u64>,
     /// Commands captured before and after the main work (SMART, link state, ...).
@@ -149,6 +218,14 @@ pub fn parse_kiln_metric(line: &str) -> Vec<(String, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nvme_graph_resolves_the_controller() {
+        let g = GraphSpec::nvme_temp_for("/dev/nvme1n1p2").unwrap();
+        assert_eq!(g.label, "NVME1");
+        assert_eq!(g.source, GraphSource::Sensor("nvme1/Composite".into()));
+        assert!(GraphSpec::nvme_temp_for("/dev/sda").is_none());
+    }
 
     #[test]
     fn kiln_metric_lines_parse() {

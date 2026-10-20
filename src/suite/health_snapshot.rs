@@ -92,6 +92,7 @@ impl Test for HealthSnapshot {
         let nvme_names: Vec<String> = env.nvmes.iter().map(|n| n.name.clone()).collect();
         Ok(Job {
             kind: JobKind::Builtin(Box::new(move |ctx| Box::pin(summarise(ctx, nvme_names)))),
+            graphs: vec![],
             expected_secs: Some(5),
             snapshots,
             verdict: Box::new(verdict),
