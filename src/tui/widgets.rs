@@ -16,12 +16,14 @@ use super::theme;
 
 /// The always-visible sensor bar. Uses the latest sample from the global sampler.
 /// Numbers are padded to a fixed width so the bar does not jitter as values change.
+/// `active_cap` is the running plan's temperature cap, shown next to the CPU
+/// reading only while a run is in progress.
 pub fn draw_status_bar(
     frame: &mut Frame,
     area: Rect,
     sample: Option<&Sample>,
     config: &StatusBarConfig,
-    temp_cap: Option<f32>,
+    active_cap: Option<f32>,
     is_root: bool,
     mem_total: u64,
 ) {
@@ -43,8 +45,15 @@ pub fn draw_status_bar(
             spans.push(Span::raw("CPU "));
             spans.push(Span::styled(
                 format!("{:>3}°C", t.round() as i32),
-                theme::temp(t, temp_cap),
+                theme::temp(t, active_cap),
             ));
+            // The running plan's cap, only while a run is in progress.
+            if let Some(cap) = active_cap {
+                spans.push(Span::styled(
+                    format!("/{:>3}°C", cap.round() as i32),
+                    theme::dim(),
+                ));
+            }
         }
         if config.cpu_usage
             && let Some(p) = s.cpu_percent

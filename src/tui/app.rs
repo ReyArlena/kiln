@@ -327,7 +327,8 @@ impl App {
         .areas(area);
 
         if show_bar {
-            let cap = self.state.config.guards.temp_max_c;
+            // Show the cap next to the CPU reading only while a run is going.
+            let cap = self.run.as_ref().and_then(|_| self.dashboard.temp_cap());
             draw_status_bar(
                 frame,
                 bar,

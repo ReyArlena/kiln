@@ -9,8 +9,9 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Gauge, Paragraph, Sparkline, Wrap};
 
+use crate::engine::test::{GraphSource, GraphSpec};
 use crate::engine::util::format_duration_secs;
-use crate::engine::{Event, Plan, Status};
+use crate::engine::{Event, Plan, Sample, Status};
 
 use super::super::input::{Action, Hit, HitMap};
 use super::super::theme;
@@ -21,8 +22,73 @@ const PANE_LOG: usize = 0;
 const PANE_DMESG: usize = 1;
 const MAX_LINES: usize = 3000;
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-/// Bottom of the temperature sparkline, in Celsius.
-const SPARK_FLOOR_C: u64 = 30;
+/// Bottom of temperature graphs, in Celsius.
+const TEMP_FLOOR_C: f64 = 30.0;
+/// Most points kept per graph.
+const MAX_POINTS: usize = 600;
+/// Width of the label column left of each graph.
+const GUTTER: u16 = 14;
+
+/// One live graph: its spec plus the points collected so far.
+struct Series {
+    spec: GraphSpec,
+    points: Vec<Option<f64>>,
+    latest: Option<f64>,
+}
+
+impl Series {
+    fn new(spec: GraphSpec) -> Self {
+        Self {
+            spec,
+            points: Vec::new(),
+            latest: None,
+        }
+    }
+
+    fn is_temperature(&self) -> bool {
+        matches!(self.spec.source, GraphSource::Sensor(_))
+    }
+
+    /// Read this series' value from a sample and the latest metrics.
+    fn value_from(&self, sample: &Sample, metrics: &BTreeMap<String, f64>) -> Option<f64> {
+        match &self.spec.source {
+            GraphSource::Sensor(id) => sample
+                .temps
+                .iter()
+                .find(|(s, _)| s == id)
+                .map(|(_, t)| *t as f64),
+            GraphSource::CpuFreq => sample.freq_mhz.map(|f| f as f64 / 1000.0),
+            GraphSource::CpuPercent => sample.cpu_percent.map(|p| p as f64),
+            GraphSource::Metric(key) => metrics.get(key).copied(),
+        }
+    }
+
+    fn push(&mut self, value: Option<f64>) {
+        if value.is_some() {
+            self.latest = value;
+        }
+        self.points.push(value);
+        if self.points.len() > MAX_POINTS {
+            self.points.remove(0);
+        }
+    }
+
+    fn label_value(&self) -> String {
+        match (self.latest, &self.spec.source) {
+            (None, _) => "-".into(),
+            (Some(v), GraphSource::Sensor(_)) => format!("{v:.0}°C"),
+            (Some(v), GraphSource::CpuFreq) => format!("{v:.1}"),
+            (Some(v), GraphSource::CpuPercent) => format!("{v:.0}%"),
+            (Some(v), GraphSource::Metric(_)) => {
+                if v.fract() == 0.0 {
+                    format!("{}", v as i64)
+                } else {
+                    format!("{v:.1}")
+                }
+            }
+        }
+    }
+}
 
 struct TestRow {
     name: String,
@@ -35,9 +101,11 @@ pub struct DashboardScreen {
     current: Option<usize>,
     current_name: String,
     started: Instant,
+    /// Set when the current test (or the run) ends so the clock stops.
+    ended: Option<Instant>,
     expected_secs: Option<u64>,
-    temps: Vec<u64>,
-    latest_temp: Option<f32>,
+    /// CPU temperature first, then whatever the running test asked for.
+    graphs: Vec<Series>,
     temp_cap: Option<f32>,
     metrics: BTreeMap<String, f64>,
     log: VecDeque<String>,
@@ -53,7 +121,17 @@ pub struct DashboardScreen {
     tick: usize,
 }
 
+/// The CPU package temperature, graphed for every test.
+fn cpu_temp_graph() -> GraphSpec {
+    GraphSpec::sensor("CPU", "primary")
+}
+
 impl DashboardScreen {
+    /// The temperature cap of the plan being run, for the header.
+    pub fn temp_cap(&self) -> Option<f32> {
+        self.temp_cap
+    }
+
     pub fn empty() -> Self {
         Self::new(&Plan::new("", Default::default()))
     }
@@ -74,9 +152,9 @@ impl DashboardScreen {
             current: None,
             current_name: String::new(),
             started: Instant::now(),
+            ended: None,
             expected_secs: None,
-            temps: Vec::new(),
-            latest_temp: None,
+            graphs: vec![Series::new(cpu_temp_graph())],
             temp_cap: plan.guards.temp_max_c,
             metrics: BTreeMap::new(),
             log: VecDeque::new(),
@@ -111,12 +189,17 @@ impl DashboardScreen {
                 index,
                 name,
                 expected_secs,
+                graphs,
                 ..
             } => {
                 self.current = Some(*index);
                 self.current_name = name.clone();
                 self.started = Instant::now();
+                self.ended = None;
                 self.expected_secs = *expected_secs;
+                // Keep the CPU history across tests; swap the rest for this test's picks.
+                self.graphs.truncate(1);
+                self.graphs.extend(graphs.iter().cloned().map(Series::new));
                 self.metrics.clear();
                 self.trip = None;
                 self.cooldown_left = None;
@@ -139,6 +222,7 @@ impl DashboardScreen {
             Event::GuardTripped { trip, .. } => self.trip = Some(trip.describe()),
             Event::Cooldown { secs_left } => self.cooldown_left = Some(*secs_left),
             Event::TestFinished { index, result } => {
+                self.ended = Some(Instant::now());
                 if let Some(row) = self.tests.get_mut(*index) {
                     row.status = result.status.label().into();
                     row.detail = result.status.detail();
@@ -159,16 +243,28 @@ impl DashboardScreen {
                 }
             }
             Event::Sample(s) => {
-                if let Some(t) = s.primary_temp_c {
-                    self.latest_temp = Some(t);
-                    self.temps.push(t.round().max(0.0) as u64);
-                    if self.temps.len() > 600 {
-                        self.temps.remove(0);
-                    }
+                for (i, series) in self.graphs.iter_mut().enumerate() {
+                    let value = if i == 0 {
+                        s.primary_temp_c.map(|t| t as f64)
+                    } else {
+                        series.value_from(s, &self.metrics)
+                    };
+                    series.push(value);
                 }
             }
-            Event::RunFinished(_) => self.finished = true,
+            Event::RunFinished(_) => {
+                self.finished = true;
+                self.ended.get_or_insert_with(Instant::now);
+            }
         }
+    }
+
+    /// Seconds since the current test started, frozen once it ends.
+    fn elapsed_secs(&self) -> u64 {
+        self.ended
+            .unwrap_or_else(Instant::now)
+            .duration_since(self.started)
+            .as_secs()
     }
 
     fn push_log(&mut self, text: String) {
@@ -262,7 +358,7 @@ impl DashboardScreen {
     /// Full-width state line: spinner, RUNNING/FINISHED, test name, progress.
     fn draw_banner(&mut self, frame: &mut Frame, area: Rect) {
         self.tick = self.tick.wrapping_add(1);
-        let elapsed = format_duration_secs(self.started.elapsed().as_secs());
+        let elapsed = format_duration_secs(self.elapsed_secs());
         let (label, style, detail) = if self.finished {
             let failed = self.tests.iter().filter(|t| t.status != "PASS").count();
             let summary = if failed == 0 {
@@ -313,8 +409,10 @@ impl DashboardScreen {
         ])
         .areas(area);
         self.draw_banner(frame, banner);
+        // Gauge + one row per graph + metrics line + borders.
+        let top_height = (self.graphs.len() as u16 + 4).max(8);
         let [top, bottom] =
-            Layout::vertical([Constraint::Length(9), Constraint::Min(5)]).areas(body);
+            Layout::vertical([Constraint::Length(top_height), Constraint::Min(5)]).areas(body);
         let [tests_area, progress_area] =
             Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)]).areas(top);
 
@@ -350,19 +448,6 @@ impl DashboardScreen {
         frame.render_widget(Paragraph::new(lines), inner);
 
         // Progress, temperature, metrics.
-        let temp_title = match self.latest_temp {
-            Some(t) => Line::from(vec![
-                Span::raw(" CPU "),
-                Span::styled(format!("{t:.1}°C"), theme::temp(t, self.temp_cap)),
-                Span::styled(
-                    self.temp_cap
-                        .map(|c| format!(" / cap {c:.0}°C "))
-                        .unwrap_or_else(|| " ".into()),
-                    theme::dim(),
-                ),
-            ]),
-            None => Line::from(Span::styled(" no sensor ", theme::dim())),
-        };
         let block = pane_block(
             &if self.finished {
                 "Finished".to_string()
@@ -370,18 +455,17 @@ impl DashboardScreen {
                 format!("Now: {}", self.current_name)
             },
             false,
-        )
-        .title_top(temp_title.right_aligned());
+        );
         let inner = block.inner(progress_area);
         frame.render_widget(block, progress_area);
-        let [gauge_area, temp_area, metrics_area] = Layout::vertical([
+        let [gauge_area, graphs_area, metrics_area] = Layout::vertical([
             Constraint::Length(1),
-            Constraint::Length(3),
+            Constraint::Length(self.graphs.len() as u16),
             Constraint::Min(1),
         ])
         .areas(inner);
 
-        let elapsed = self.started.elapsed().as_secs();
+        let elapsed = self.elapsed_secs();
         let label = match (self.cooldown_left, self.expected_secs) {
             (Some(left), _) => format!("cooldown {left}s"),
             (None, Some(exp)) if exp > 0 => format!(
@@ -405,28 +489,12 @@ impl DashboardScreen {
             gauge_area,
         );
 
-        // Temperature reading lives in the pane's top border (right side), so the
-        // sparkline gets the full width.
-        let width = temp_area.width as usize;
-        // Show 30C..cap rather than 0..cap so a few degrees of movement is visible,
-        // and pad the left so the newest reading always sits at the right edge.
-        let floor = SPARK_FLOOR_C;
-        let ceiling = self
-            .temp_cap
-            .map(|c| c as u64)
-            .unwrap_or(100)
-            .max(floor + 10);
-        let recent = self.temps.iter().rev().take(width).rev();
-        let mut data: Vec<Option<u64>> =
-            vec![None; width.saturating_sub(self.temps.len().min(width))];
-        data.extend(recent.map(|t| Some(t.saturating_sub(floor).min(ceiling - floor))));
-        frame.render_widget(
-            Sparkline::default()
-                .data(data)
-                .max(ceiling - floor)
-                .style(Style::default().fg(theme::ACCENT)),
-            temp_area,
-        );
+        let rows =
+            Layout::vertical(vec![Constraint::Length(1); self.graphs.len()]).split(graphs_area);
+        let cap = self.temp_cap;
+        for (series, row) in self.graphs.iter().zip(rows.iter()) {
+            draw_series(frame, *row, series, cap);
+        }
 
         let metrics: Vec<String> = self
             .metrics
@@ -473,6 +541,67 @@ impl DashboardScreen {
 
         draw_key_hints(frame, hints, &self.key_hints(), hits);
     }
+}
+
+/// One graph row: label and latest value in the gutter, sparkline filling the rest,
+/// newest point at the right edge.
+fn draw_series(frame: &mut Frame, row: Rect, series: &Series, temp_cap: Option<f32>) {
+    let [gutter, graph] =
+        Layout::horizontal([Constraint::Length(GUTTER), Constraint::Min(1)]).areas(row);
+    let value_style = match (series.is_temperature(), series.latest) {
+        (true, Some(v)) => theme::temp(
+            v as f32,
+            if series.spec.label == "CPU" {
+                temp_cap
+            } else {
+                Some(80.0)
+            },
+        ),
+        _ => theme::number(),
+    };
+    let label = Line::from(vec![
+        Span::styled(format!("{:<5}", series.spec.label), theme::dim()),
+        Span::styled(format!("{:>7} ", series.label_value()), value_style),
+    ]);
+    frame.render_widget(Paragraph::new(label), gutter);
+
+    // Scale every series to 0..1000 so one sparkline call fits all of them.
+    let (floor, ceiling) = match series.spec.source {
+        GraphSource::Sensor(_) => {
+            let cap = if series.spec.label == "CPU" {
+                temp_cap.map(|c| c as f64)
+            } else {
+                Some(85.0)
+            };
+            (TEMP_FLOOR_C, cap.unwrap_or(100.0).max(TEMP_FLOOR_C + 10.0))
+        }
+        GraphSource::CpuPercent => (0.0, 100.0),
+        GraphSource::CpuFreq | GraphSource::Metric(_) => {
+            let max = series
+                .points
+                .iter()
+                .flatten()
+                .copied()
+                .fold(0.0_f64, f64::max);
+            (0.0, if max > 0.0 { max } else { 1.0 })
+        }
+    };
+    let width = graph.width as usize;
+    let recent = series.points.iter().rev().take(width).rev();
+    let mut data: Vec<Option<u64>> =
+        vec![None; width.saturating_sub(series.points.len().min(width))];
+    data.extend(
+        recent.map(|p| {
+            p.map(|v| (((v - floor) / (ceiling - floor)).clamp(0.0, 1.0) * 1000.0) as u64)
+        }),
+    );
+    frame.render_widget(
+        Sparkline::default()
+            .data(data)
+            .max(1000)
+            .style(Style::default().fg(theme::ACCENT)),
+        graph,
+    );
 }
 
 /// Tail view of a line buffer. Long lines wrap to the pane width, and
