@@ -279,7 +279,7 @@ impl DashboardScreen {
                 };
                 Line::from(vec![
                     Span::raw(format!("{marker} {:<2} ", i + 1)),
-                    Span::styled(format!("{:<7}", t.status), theme::status(&t.status)),
+                    Span::styled(format!("{:<8}", t.status), theme::status(&t.status)),
                     Span::raw(t.name.clone()),
                     Span::styled(
                         if t.detail.is_empty() {
