@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Persistent sensor status bar, configurable per item.
 - Saved profiles per test and saved plans, as TOML under the config directory.
 - Settings in `~/.config/kiln`, runs in `~/.local/share/kiln`, resolved from the invoking user when run through sudo.
-- `install.sh` with `--uninstall` and `--purge`.
+- `install.sh`: downloads the prebuilt binary for the current architecture; `--uninstall` and `--purge`.
 - Dashboard banner with spinner, test position and progress.
 - Dashboard graphs: one braille row per component (CPU temperature, usage, frequency, memory, CPU and GPU watts, every NVMe, GPU), colour sliding green to red through each range, plus metrics the running test reports (e.g. MB/s). Each graph has a toggle in settings.
 - CPU package power (RAPL, root only) and GPU power in the header.

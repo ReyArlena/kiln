@@ -27,7 +27,7 @@ Hardware burn-in and diagnostics runner for Linux. Pick tests, set guards such a
 curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh
 ```
 
-Builds with cargo if you have it, otherwise downloads a release binary. Installs to `~/.local/bin/kiln`. Uninstall with `sh install.sh --uninstall` (or `--purge` to also delete settings and history).
+Downloads the prebuilt static binary for your architecture (x86_64 or aarch64) from the latest release into `~/.local/bin/kiln`. No compiler needed. Uninstall with `sh install.sh --uninstall` (or `--purge` to also delete settings and history). To build it yourself instead, see [Develop](#develop).
 
 Tools the tests call, on Arch:
 

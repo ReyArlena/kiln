@@ -1,27 +1,18 @@
 #!/bin/sh
-# Installs (or removes) kiln for the current user.
+# Installs (or removes) kiln for the current user from the latest GitHub release.
 #
 #   curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh
-#   sh install.sh                 # from a local clone (builds from source)
 #   sh install.sh --uninstall     # remove the binary
 #   sh install.sh --purge         # remove the binary, settings and run history
 #
-# Installs to ~/.local/bin. Builds with cargo when available; otherwise
-# downloads a prebuilt binary from the latest GitHub release.
+# Installs a prebuilt static binary to ~/.local/bin (override with KILN_BIN_DIR).
+# To build from source instead, see the Develop section of the README.
 set -e
 
 REPO="ReyArlena/kiln"
 BIN_DIR="${KILN_BIN_DIR:-$HOME/.local/bin}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/kiln"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/kiln"
-
-# Release assets are named kiln-linux-<arch>.
-case "$(uname -m)" in
-    x86_64|amd64) ARCH="x86_64" ;;
-    aarch64|arm64) ARCH="aarch64" ;;
-    *) ARCH="" ;;
-esac
-ASSET="kiln-linux-$ARCH"
 
 case "$1" in
     --uninstall|--purge)
@@ -35,43 +26,47 @@ case "$1" in
         fi
         exit 0
         ;;
+    "") ;;
+    *)
+        echo "Usage: install.sh [--uninstall | --purge]" >&2
+        exit 1
+        ;;
 esac
 
-mkdir -p "$BIN_DIR"
-src_dir=$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo "")
-
-if command -v cargo >/dev/null 2>&1; then
-    if [ -n "$src_dir" ] && [ -f "$src_dir/Cargo.toml" ]; then
-        echo "Building from $src_dir"
-        cargo install --path "$src_dir" --root "${BIN_DIR%/bin}" --locked
-    else
-        echo "Building from https://github.com/$REPO"
-        cargo install --git "https://github.com/$REPO" --root "${BIN_DIR%/bin}" --locked
-    fi
-else
-    if ! command -v curl >/dev/null 2>&1; then
-        echo "Need either cargo (https://rustup.rs) or curl" >&2
-        exit 1
-    fi
-    if [ -z "$ARCH" ]; then
-        echo "No prebuilt binary for $(uname -m). Install the Rust toolchain (https://rustup.rs) and rerun." >&2
-        exit 1
-    fi
-    url="https://github.com/$REPO/releases/latest/download/$ASSET"
-    echo "No cargo found, downloading $url"
-    tmp=$(mktemp "$BIN_DIR/.kiln.XXXXXX")
-    trap 'rm -f "$tmp"' EXIT
-    if ! curl -fsSL "$url" -o "$tmp"; then
-        echo "Download failed. Install the Rust toolchain (https://rustup.rs) and rerun, or build from a clone." >&2
-        exit 1
-    fi
-    chmod 755 "$tmp"
-    mv -f "$tmp" "$BIN_DIR/kiln"
-    trap - EXIT
+if ! command -v curl >/dev/null 2>&1; then
+    echo "curl is required" >&2
+    exit 1
 fi
 
+# Release assets are named kiln-linux-<arch>.
+case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64|Linux-amd64) ASSET="kiln-linux-x86_64" ;;
+    Linux-aarch64|Linux-arm64) ASSET="kiln-linux-aarch64" ;;
+    *)
+        echo "No prebuilt binary for $(uname -s) $(uname -m)." >&2
+        echo "Build from source instead: see the Develop section of the README." >&2
+        exit 1
+        ;;
+esac
+url="https://github.com/$REPO/releases/latest/download/$ASSET"
+
+mkdir -p "$BIN_DIR"
+# Download to a temp file first, then move into place, so a failed download
+# never leaves a truncated binary behind.
+tmp=$(mktemp "$BIN_DIR/.kiln.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+
+echo "Downloading $url"
+if ! curl -fsSL "$url" -o "$tmp"; then
+    echo "Download failed. Check https://github.com/$REPO/releases, or build from source (see the README)." >&2
+    exit 1
+fi
+chmod 755 "$tmp"
+mv -f "$tmp" "$BIN_DIR/kiln"
+trap - EXIT
+
 echo
-echo "Installed $BIN_DIR/kiln"
+echo "Installed $BIN_DIR/kiln ($("$BIN_DIR/kiln" --version 2>/dev/null || echo 'version unknown'))"
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
     *) echo "Note: $BIN_DIR is not on your PATH" ;;
@@ -79,3 +74,5 @@ esac
 echo
 echo "Most tests need root. sudo resets PATH, so run it by full path:"
 echo "  sudo $BIN_DIR/kiln"
+echo
+echo "Prefer to compile it yourself? See the Develop section of the README."
