@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard banner with spinner, test position and progress.
 - Dashboard graphs: one braille row per component (CPU temperature, usage, frequency, memory, CPU and GPU watts, every NVMe, GPU), colour sliding green to red through each range, plus metrics the running test reports (e.g. MB/s). Each graph has a toggle in settings.
 - CPU package power (RAPL, root only) and GPU power in the header.
-- Launch popup explaining which tests need root.
+- Launch popup explaining which tests need root, with an offer to relaunch through sudo.
 - GitHub Actions: CI (fmt, clippy, tests) and a release workflow that attaches static `kiln-linux-x86_64` and `kiln-linux-aarch64` binaries to `v*` tags.
 
 ### Changed

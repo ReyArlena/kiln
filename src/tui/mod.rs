@@ -49,7 +49,8 @@ pub async fn run(state: AppState) -> Result<()> {
 
     match result {
         Ok(app::Exit::Quit) => Ok(()),
-        Ok(app::Exit::Restart) => restart(),
+        Ok(app::Exit::Restart) => restart(false),
+        Ok(app::Exit::Elevate) => restart(true),
         Err(e) => Err(e),
     }
 }
@@ -71,11 +72,25 @@ fn spawn_input_thread(tx: mpsc::UnboundedSender<crossterm::event::Event>) {
     });
 }
 
-/// Replace this process with a fresh copy of itself, same arguments.
-fn restart() -> Result<()> {
+/// Replace this process with a fresh copy of itself, same arguments,
+/// optionally through sudo. The terminal is already restored at this point,
+/// so sudo can prompt for the password normally.
+fn restart(elevate: bool) -> Result<()> {
     use std::os::unix::process::CommandExt;
     let exe = std::env::current_exe()?;
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let err = std::process::Command::new(exe).args(args).exec();
+    let err = if elevate {
+        eprintln!(
+            "Relaunching as root: sudo {} {}",
+            exe.display(),
+            args.join(" ")
+        );
+        std::process::Command::new("sudo")
+            .arg(&exe)
+            .args(&args)
+            .exec()
+    } else {
+        std::process::Command::new(&exe).args(&args).exec()
+    };
     Err(anyhow::anyhow!("restart failed: {err}"))
 }

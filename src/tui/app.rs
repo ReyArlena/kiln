@@ -30,6 +30,8 @@ use super::widgets::{Modal, draw_help, draw_status_bar};
 pub enum Exit {
     Quit,
     Restart,
+    /// Relaunch through sudo with the same arguments.
+    Elevate,
 }
 
 pub struct App {
@@ -54,11 +56,20 @@ pub struct App {
 impl App {
     pub fn new(state: AppState) -> Self {
         let picker = PickerScreen::new(&state);
+        // Offer to relaunch through sudo when it is available; otherwise just explain.
         let modal = (!state.is_root()).then(|| {
-            Modal::message(
-                "Not running as root",
-                &format!("Storage tests and some health captures need root.\nThey are greyed out in the list.\n\nTo enable them, quit and relaunch with:\n  {}", state.sudo_hint()),
-            )
+            if which::which("sudo").is_ok() {
+                Modal::confirm(
+                    "Not running as root",
+                    "Storage tests and some health captures need root.\nThey are greyed out in the list.\n\nRelaunch as root now? (sudo will ask for your password)",
+                    "elevate",
+                )
+            } else {
+                Modal::message(
+                    "Not running as root",
+                    &format!("Storage tests and some health captures need root.\nThey are greyed out in the list.\n\nTo enable them, quit and relaunch with:\n  {}", state.sudo_hint()),
+                )
+            }
         });
         Self {
             screen: Screen::Picker,
@@ -219,6 +230,7 @@ impl App {
                 }
                 vec![Effect::Quit]
             }
+            "elevate" => vec![Effect::Elevate],
             "delete-run" => self.history.delete_current(&self.state),
             "reset-config" => vec![Effect::ResetConfig],
             "delete-runs" => vec![Effect::DeleteAllRuns],
@@ -290,6 +302,7 @@ impl App {
                     self.toast("run history deleted");
                 }
                 Effect::Restart => self.exit = Some(Exit::Restart),
+                Effect::Elevate => self.exit = Some(Exit::Elevate),
                 Effect::Quit => self.exit = Some(Exit::Quit),
             }
         }

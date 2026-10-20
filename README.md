@@ -37,7 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/ReyArlena/kiln/main/install.sh | sh
 
 Why the difference matters: most tests need root, and on most distros (Arch, Debian, Ubuntu, Fedora) `sudo` replaces your `PATH` with a fixed system list (`secure_path`: `/usr/local/bin`, `/usr/bin`, ...). A per-user install then has to be launched as `sudo ~/.local/bin/kiln`. Check with `sudo sh -c 'echo $PATH'`. Settings and results go to your own home either way, never root's.
 
-> **Note:** you can still install without sudo and run the app as root by giving its full path, for example `sudo /home/rey/.local/bin/kiln` or `sudo /home/rey/Projects/kiln/target/release/kiln` for a local build. If you launch it without root, kiln tells you on startup which tests are disabled and prints the exact `sudo` command for your install.
+> **Note:** you can still install without sudo and run the app as root by giving its full path, for example `sudo /home/rey/.local/bin/kiln` or `sudo /home/rey/Projects/kiln/target/release/kiln` for a local build. If you launch it without root, kiln tells you on startup which tests are disabled and offers to relaunch itself through `sudo` (press Enter and type your password), or prints the exact command if `sudo` is not available.
 
 Uninstall with `sh install.sh --uninstall` (or `--purge` to also delete settings and history), with `sudo` if it was installed system-wide. To build it yourself instead, see [Develop](#develop).
 

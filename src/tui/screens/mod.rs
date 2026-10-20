@@ -45,5 +45,7 @@ pub enum Effect {
     ResetConfig,
     DeleteAllRuns,
     Restart,
+    /// Relaunch the app through sudo.
+    Elevate,
     Quit,
 }
