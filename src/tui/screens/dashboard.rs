@@ -20,6 +20,8 @@ use super::Effect;
 const PANE_LOG: usize = 0;
 const PANE_DMESG: usize = 1;
 const MAX_LINES: usize = 3000;
+/// Bottom of the temperature sparkline, in Celsius.
+const SPARK_FLOOR_C: u64 = 30;
 
 struct TestRow {
     name: String,
@@ -334,22 +336,16 @@ impl DashboardScreen {
             gauge_area,
         );
 
-        let [spark_area, temp_label] =
-            Layout::horizontal([Constraint::Min(10), Constraint::Length(22)]).areas(temp_area);
+        let [spark_area, temp_label] = Layout::horizontal([Constraint::Min(10), Constraint::Length(22)]).areas(temp_area);
         let width = spark_area.width as usize;
-        let data: Vec<u64> = self.temps.iter().rev().take(width).rev().copied().collect();
-        let max = self
-            .temp_cap
-            .map(|c| c as u64)
-            .unwrap_or(100)
-            .max(data.iter().copied().max().unwrap_or(0));
-        frame.render_widget(
-            Sparkline::default()
-                .data(&data)
-                .max(max)
-                .style(Style::default().fg(theme::ACCENT)),
-            spark_area,
-        );
+        // Show 30C..cap rather than 0..cap so a few degrees of movement is visible,
+        // and pad the left so the newest reading always sits at the right edge.
+        let floor = SPARK_FLOOR_C;
+        let ceiling = self.temp_cap.map(|c| c as u64).unwrap_or(100).max(floor + 10);
+        let recent = self.temps.iter().rev().take(width).rev();
+        let mut data: Vec<Option<u64>> = vec![None; width.saturating_sub(self.temps.len().min(width))];
+        data.extend(recent.map(|t| Some(t.saturating_sub(floor).min(ceiling - floor))));
+        frame.render_widget(Sparkline::default().data(data).max(ceiling - floor).style(Style::default().fg(theme::ACCENT)), spark_area);
         let temp_text = match self.latest_temp {
             Some(t) => Line::from(vec![
                 Span::raw(" CPU "),
