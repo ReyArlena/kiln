@@ -171,7 +171,14 @@ impl App {
         // Text editing wants raw keys, so route those before the action mapping.
         if let TermEvent::Key(key) = &event {
             if let Some(modal) = &mut self.modal {
-                if let Some(confirmed) = modal.handle_key(*key) {
+                let outcome = modal.handle_key(*key);
+                if modal.copy_requested {
+                    modal.copy_requested = false;
+                    let text = modal.copy_text.clone().unwrap_or_default();
+                    self.copy_to_clipboard(&text);
+                    return;
+                }
+                if let Some(confirmed) = outcome {
                     let tag = modal.tag.clone();
                     self.modal = None;
                     if confirmed {
@@ -381,6 +388,17 @@ impl App {
         self.screen = Screen::Dashboard;
     }
 
+    /// Copy through the terminal with OSC 52. Works in most modern terminals;
+    /// where it does not, the toast still tells the user what to try instead.
+    fn copy_to_clipboard(&mut self, text: &str) {
+        use crossterm::clipboard::CopyToClipboard;
+        match crossterm::execute!(std::io::stdout(), CopyToClipboard::to_clipboard_from(text)) {
+            Ok(()) => self
+                .toast("copied (if your terminal supports OSC 52; otherwise Shift+drag to select)"),
+            Err(e) => self.toast(&format!("copy failed: {e}")),
+        }
+    }
+
     fn toast(&mut self, text: &str) {
         self.toast = Some((text.to_string(), Instant::now()));
     }
@@ -475,9 +493,10 @@ fn tools_modal(state: &AppState) -> Option<Modal> {
         let mark = if missing.contains(bin) { "✗" } else { "✓" };
         body.push_str(&format!("  {mark} {bin}\n"));
     }
+    let command = crate::engine::deps::install_command(&missing);
     body.push_str("\nInstall the missing ones:\n  ");
-    body.push_str(&crate::engine::deps::install_command(&missing));
-    Some(Modal::message("Missing tools", &body))
+    body.push_str(&command);
+    Some(Modal::message_with_copy("Missing tools", &body, &command))
 }
 
 /// Await the next runner event, or pend forever when no run is active so the

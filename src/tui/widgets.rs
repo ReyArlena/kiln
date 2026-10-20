@@ -214,6 +214,10 @@ pub struct Modal {
     pub kind: ModalKind,
     /// Screen-specific tag saying what to do on confirm.
     pub tag: String,
+    /// Text that `c` copies to the clipboard (OSC 52), e.g. an install command.
+    pub copy_text: Option<String>,
+    /// Set when `c` was pressed; the app performs the copy and clears it.
+    pub copy_requested: bool,
 }
 
 impl Modal {
@@ -223,6 +227,16 @@ impl Modal {
             body: body.into(),
             kind: ModalKind::Message,
             tag: String::new(),
+            copy_text: None,
+            copy_requested: false,
+        }
+    }
+
+    /// A message with a line the user can copy by pressing `c`.
+    pub fn message_with_copy(title: &str, body: &str, copy_text: &str) -> Self {
+        Self {
+            copy_text: Some(copy_text.to_string()),
+            ..Self::message(title, body)
         }
     }
 
@@ -232,6 +246,8 @@ impl Modal {
             body: body.into(),
             kind: ModalKind::Confirm,
             tag: tag.into(),
+            copy_text: None,
+            copy_requested: false,
         }
     }
 
@@ -244,6 +260,8 @@ impl Modal {
                 input: TextInput::default(),
             },
             tag: tag.into(),
+            copy_text: None,
+            copy_requested: false,
         }
     }
 
@@ -253,6 +271,10 @@ impl Modal {
             ModalKind::Message => match key.code {
                 KeyCode::Enter | KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char(' ') => {
                     Some(true)
+                }
+                KeyCode::Char('c') if self.copy_text.is_some() => {
+                    self.copy_requested = true;
+                    None
                 }
                 _ => None,
             },
@@ -305,10 +327,18 @@ impl Modal {
             .collect();
         lines.push(Line::from(""));
         match &self.kind {
-            ModalKind::Message => lines.push(Line::from(vec![
-                Span::styled("Enter", theme::key()),
-                Span::raw(" close"),
-            ])),
+            ModalKind::Message => {
+                let mut hint = vec![Span::styled("Enter", theme::key()), Span::raw(" close")];
+                if self.copy_text.is_some() {
+                    hint.extend([
+                        Span::raw("   "),
+                        Span::styled("c", theme::key()),
+                        Span::raw(" copy command"),
+                        Span::styled("   (or Shift+drag to select text)", theme::dim()),
+                    ]);
+                }
+                lines.push(Line::from(hint));
+            }
             ModalKind::Confirm => lines.push(Line::from(vec![
                 Span::styled("y", theme::key()),
                 Span::raw(" / "),

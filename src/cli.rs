@@ -427,9 +427,8 @@ fn print_event(event: &Event, verbose: bool, sample_count: &mut usize) {
         Event::Line { text, .. } => {
             if verbose
                 || text.starts_with("KILN_METRIC")
-                || text.contains("fail")
-                || text.contains("error")
                 || text.starts_with("kiln:")
+                || crate::engine::util::looks_like_problem(text)
             {
                 println!("[{stamp}]   {text}");
             }

@@ -799,12 +799,7 @@ fn wrap_line(text: &str, width: usize) -> Vec<String> {
 /// Style a (possibly wrapped) piece using the whole original line for context.
 fn style_log_line(piece: &str, whole: &str) -> Line<'static> {
     let text = whole;
-    let lower = text.to_ascii_lowercase();
-    let style = if lower.contains("fail")
-        || lower.contains("error")
-        || lower.contains("mismatch")
-        || lower.contains("diff ")
-    {
+    let style = if crate::engine::util::looks_like_problem(text) {
         Style::default().fg(theme::BAD)
     } else if text.starts_with("===") || text.starts_with("kiln:") {
         Style::default().fg(theme::INFO).bold()
