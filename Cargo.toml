@@ -42,3 +42,6 @@ strip = true
 # Hashing in the RAM test is CPU bound; keep it fast even in debug builds.
 [profile.dev.package.sha2]
 opt-level = 3
+
+[dev-dependencies]
+tempfile = "3.27.0"

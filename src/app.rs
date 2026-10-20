@@ -35,6 +35,19 @@ impl AppState {
         })
     }
 
+    /// An app state rooted in a scratch directory, with no logging. For tests.
+    pub fn sandboxed(base: &Path) -> Result<Self> {
+        let paths = Paths::under(base);
+        paths.ensure_dirs()?;
+        let config = AppConfig::load(&paths.config_file)?;
+        Ok(Self {
+            paths,
+            config,
+            registry: Registry::builtin(),
+            env: EnvSnapshot::gather(),
+        })
+    }
+
     pub fn save_config(&self) -> Result<()> {
         self.config.save(&self.paths.config_file)?;
         self.paths.restore_owner(&self.paths.config_file);
@@ -76,6 +89,15 @@ impl AppState {
 
     pub fn is_root(&self) -> bool {
         self.env.is_root
+    }
+
+    /// The command to relaunch as root. Uses the full binary path because
+    /// `sudo` resets `PATH` and would not find a per-user install.
+    pub fn sudo_hint(&self) -> String {
+        let exe = std::env::current_exe()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| "kiln".into());
+        format!("sudo {exe}")
     }
 }
 

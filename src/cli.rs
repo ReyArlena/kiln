@@ -310,7 +310,10 @@ async fn run(state: &AppState, args: RunArgs) -> Result<i32> {
         }
     }
     if needs_root {
-        bail!("some of these tests need root. Relaunch with: sudo kiln run ...");
+        bail!(
+            "some of these tests need root. Relaunch with: {} run ...",
+            state.sudo_hint()
+        );
     }
     if !destructive.is_empty() && !args.yes_destroy {
         eprintln!("These tests will WIPE a device:");

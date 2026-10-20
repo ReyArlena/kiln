@@ -61,6 +61,22 @@ impl Paths {
         })
     }
 
+    /// Everything under one base directory. Used by tests and for sandboxed runs.
+    pub fn under(base: &Path) -> Self {
+        let config_dir = base.join("config");
+        let data_dir = base.join("data");
+        Self {
+            config_file: config_dir.join("config.toml"),
+            profiles_dir: config_dir.join("profiles"),
+            plans_dir: config_dir.join("plans"),
+            runs_dir: data_dir.join("runs"),
+            log_file: data_dir.join("kiln.log"),
+            config_dir,
+            data_dir,
+            owner: None,
+        }
+    }
+
     /// Create the directory tree if it is missing.
     pub fn ensure_dirs(&self) -> Result<()> {
         for dir in [

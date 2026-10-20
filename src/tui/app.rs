@@ -394,3 +394,26 @@ async fn recv_run_event(run: &mut Option<RunHandle>) -> Option<Event> {
         None => std::future::pending().await,
     }
 }
+
+/// Hooks used by the render tests in `tests/tui_render.rs`.
+impl App {
+    pub fn draw_for_test(&mut self, frame: &mut ratatui::Frame) {
+        self.draw(frame);
+    }
+
+    pub fn open_setup_for_test(&mut self, ids: &[String]) {
+        self.apply(vec![Effect::SetupFor(ids.to_vec())]);
+    }
+
+    pub fn show_screen_for_test(&mut self, name: &str) {
+        let screen = match name {
+            "setup" => Screen::Setup,
+            "dashboard" => Screen::Dashboard,
+            "results" => Screen::Results,
+            "history" => Screen::History,
+            "settings" => Screen::Settings,
+            _ => Screen::Picker,
+        };
+        self.goto(screen);
+    }
+}
