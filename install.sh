@@ -33,17 +33,29 @@ DATA_DIR="${XDG_DATA_HOME:-$USER_HOME/.local/share}/kiln"
 
 case "$1" in
     --uninstall|--purge)
-        # Remove whichever installs exist. The system one needs root.
         removed=0
-        for bin in "$BIN_DIR/kiln" "$HOME/.local/bin/kiln" "$USER_HOME/.local/bin/kiln" /usr/local/bin/kiln; do
+        needs_root=0
+        for bin in /usr/local/bin/kiln "$USER_HOME/.local/bin/kiln" "$HOME/.local/bin/kiln" "$BIN_DIR/kiln"; do
             [ -f "$bin" ] || continue
-            if rm -f "$bin" 2>/dev/null; then
+            if [ -w "$(dirname "$bin")" ]; then
+                rm -f "$bin"
                 echo "Removed $bin"
                 removed=1
             else
-                echo "Could not remove $bin (rerun with sudo)" >&2
+                needs_root=1
+                system_bin="$bin"
             fi
         done
+        if [ "$needs_root" = "1" ]; then
+            echo "kiln is installed system-wide at $system_bin, which needs root to remove." >&2
+            echo "Rerun with sudo:" >&2
+            if [ -f "$0" ] && [ "$0" != "sh" ]; then
+                echo "  sudo sh $0 $1" >&2
+            else
+                echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sudo sh -s -- $1" >&2
+            fi
+            exit 1
+        fi
         [ "$removed" = "1" ] || echo "kiln was not installed"
         if [ "$1" = "--purge" ]; then
             rm -rf "$CONFIG_DIR" "$DATA_DIR"
