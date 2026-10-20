@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `install.sh` with `--uninstall` and `--purge`.
 - Dashboard banner with spinner, test position and progress.
 - Launch popup explaining which tests need root.
+- GitHub Actions: CI (fmt, clippy, tests) and a release workflow that attaches a static musl binary to `v*` tags.
 
 ### Changed
 

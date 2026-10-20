@@ -107,6 +107,16 @@ rustup target add x86_64-unknown-linux-musl
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
+### Release
+
+Tag and push; GitHub Actions builds the musl binary and attaches it to the release, which is what `install.sh` downloads on machines without cargo:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+CI runs `cargo fmt --check`, clippy and the tests on every push.
+
 ### Tests
 
 ```sh
