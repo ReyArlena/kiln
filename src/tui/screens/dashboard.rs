@@ -350,6 +350,19 @@ impl DashboardScreen {
         frame.render_widget(Paragraph::new(lines), inner);
 
         // Progress, temperature, metrics.
+        let temp_title = match self.latest_temp {
+            Some(t) => Line::from(vec![
+                Span::raw(" CPU "),
+                Span::styled(format!("{t:.1}C"), theme::temp(t, self.temp_cap)),
+                Span::styled(
+                    self.temp_cap
+                        .map(|c| format!(" / cap {c:.0}C "))
+                        .unwrap_or_else(|| " ".into()),
+                    theme::dim(),
+                ),
+            ]),
+            None => Line::from(Span::styled(" no sensor ", theme::dim())),
+        };
         let block = pane_block(
             &if self.finished {
                 "Finished".to_string()
@@ -357,7 +370,8 @@ impl DashboardScreen {
                 format!("Now: {}", self.current_name)
             },
             false,
-        );
+        )
+        .title_top(temp_title.right_aligned());
         let inner = block.inner(progress_area);
         frame.render_widget(block, progress_area);
         let [gauge_area, temp_area, metrics_area] = Layout::vertical([
@@ -391,9 +405,9 @@ impl DashboardScreen {
             gauge_area,
         );
 
-        let [spark_area, temp_label] =
-            Layout::horizontal([Constraint::Min(10), Constraint::Length(22)]).areas(temp_area);
-        let width = spark_area.width as usize;
+        // Temperature reading lives in the pane's top border (right side), so the
+        // sparkline gets the full width.
+        let width = temp_area.width as usize;
         // Show 30C..cap rather than 0..cap so a few degrees of movement is visible,
         // and pad the left so the newest reading always sits at the right edge.
         let floor = SPARK_FLOOR_C;
@@ -411,31 +425,7 @@ impl DashboardScreen {
                 .data(data)
                 .max(ceiling - floor)
                 .style(Style::default().fg(theme::ACCENT)),
-            spark_area,
-        );
-        let temp_text = match self.latest_temp {
-            Some(t) => Line::from(vec![
-                Span::raw(" CPU "),
-                Span::styled(format!("{t:.1}C"), theme::temp(t, self.temp_cap)),
-                Span::styled(
-                    self.temp_cap
-                        .map(|c| format!(" / cap {c:.0}C"))
-                        .unwrap_or_default(),
-                    theme::dim(),
-                ),
-            ]),
-            None => Line::from(Span::styled(" no sensor", theme::dim())),
-        };
-        let mut temp_lines = vec![temp_text];
-        if let Some(trip) = &self.trip {
-            temp_lines.push(Line::from(Span::styled(
-                format!(" stopping: {trip}"),
-                Style::default().fg(theme::WARN),
-            )));
-        }
-        frame.render_widget(
-            Paragraph::new(temp_lines).wrap(Wrap { trim: true }),
-            temp_label,
+            temp_area,
         );
 
         let metrics: Vec<String> = self
