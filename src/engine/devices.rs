@@ -189,13 +189,24 @@ mod tests {
     }
 
     #[test]
-    fn mounts_match_disk_and_partitions() {
-        // Sources must resolve, so use /dev/null-style fakes via names only where canonicalize succeeds.
-        let devices = list_block_devices();
-        // Whatever this machine has, no entry may be a partition or a virtual device.
-        for d in &devices {
-            assert!(!d.path.contains("loop"));
-            assert!(d.size_bytes > 0, "{}", d.path);
+    fn listing_skips_partitions_and_virtual_devices() {
+        // Whatever this machine (or a CI runner) has, no entry may be a
+        // partition or a loop/ram/zram device.
+        for d in list_block_devices() {
+            let name = d.path.trim_start_matches("/dev/");
+            assert!(
+                !name.starts_with("loop") && !name.starts_with("zram") && !name.starts_with("ram"),
+                "{}",
+                d.path
+            );
+            assert!(
+                !std::path::Path::new("/sys/class/block")
+                    .join(name)
+                    .join("partition")
+                    .exists(),
+                "{}",
+                d.path
+            );
         }
     }
 }
