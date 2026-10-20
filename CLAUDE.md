@@ -34,6 +34,10 @@ cargo fmt
 
 TUI cannot be driven in this environment without a TTY. Use `tests/tui_render.rs` (ratatui TestBackend) for layout checks, and the headless CLI for behaviour.
 
+## Benchmarks
+
+In-process benchmarks (`src/suite/bench.rs` helpers) must stay cache-resident per thread so the all-core score measures cores, not DRAM. They warn in debug builds; always judge numbers from `--release`.
+
 ## Adding a test
 
 1. New file in `src/suite/`, struct implementing `Test`. Build a `Job` in `plan()`: `JobKind::Command` for external tools (output streamed and parsed line by line) or `JobKind::Builtin` for Rust code.

@@ -55,6 +55,9 @@ pub enum ParamKind {
     /// A whole block device that the test will overwrite. Never has a
     /// default: the user must type it.
     BlockDevice,
+    /// A block device that is only read from (benchmarks). Still typed by
+    /// the user, but not destructive.
+    ReadDevice,
 }
 
 impl ParamSpec {
@@ -67,7 +70,7 @@ impl ParamSpec {
             ParamKind::Choice { default, .. } => ParamValue::Text((*default).to_string()),
             ParamKind::Bool { default } => ParamValue::Bool(*default),
             ParamKind::Path { default } => ParamValue::Text((*default).to_string()),
-            ParamKind::BlockDevice => return None,
+            ParamKind::BlockDevice | ParamKind::ReadDevice => return None,
         })
     }
 
@@ -123,7 +126,7 @@ impl ParamSpec {
                 }
                 Ok(ParamValue::Text(text.to_string()))
             }
-            ParamKind::BlockDevice => {
+            ParamKind::BlockDevice | ParamKind::ReadDevice => {
                 if !text.starts_with("/dev/") {
                     return Err(bad("expected a device path under /dev"));
                 }

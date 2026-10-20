@@ -46,6 +46,8 @@ pub enum Command {
     Runs,
     /// Print a Markdown report for a run (id, or path to run.json)
     Report { run: String },
+    /// Put two runs side by side: metrics, max temperature, duration, with the change
+    Compare { a: String, b: String },
     /// Print the log of one test from a past run
     Log {
         run: String,
@@ -143,6 +145,11 @@ pub async fn run_cli(cli: Cli) -> Result<i32> {
         Command::Report { run } => {
             let run = load_run(&state, &run)?;
             print!("{}", report::markdown(&run));
+            Ok(0)
+        }
+        Command::Compare { a, b } => {
+            let (a, b) = (load_run(&state, &a)?, load_run(&state, &b)?);
+            print!("{}", report::compare(&a, &b));
             Ok(0)
         }
         Command::Log { run, index } => log(&state, &run, index),

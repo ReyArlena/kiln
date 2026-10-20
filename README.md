@@ -18,6 +18,12 @@ Hardware burn-in and diagnostics runner for Linux. Pick tests, set guards such a
 | `fio-verify` | Data corrupted on the way to or from a drive (DMA path) | `fio --verify=crc32c --direct=1` |
 | `btrfs-harness` | Reproduces OS-install corruption: format, copy, scrub, compare | `mkfs.btrfs`, `cp -a`, `btrfs scrub`, `cmp` |
 | `health-snapshot` | SMART, PCIe link speed and kernel errors, before and after | `nvme smart-log`, `smartctl`, sysfs |
+| `cpu-bench` | Units/s single and all threads; throttling or a lost core shows as a drop | in-process sieve, matrix, SHA-256 |
+| `mem-bandwidth` | GB/s; single vs dual channel, JEDEC vs EXPO show here first | in-process STREAM kernels |
+| `mem-latency` | ns per random DRAM access; timings and fabric clock | in-process pointer chase |
+| `disk-read` | Sequential MB/s and 4k IOPS, read-only, safe on the system drive | `fio --readonly` |
+
+Benchmarks are for comparing kiln runs against each other (`kiln compare <run> <run>`), on the same machine over time or across machines. They are not comparable to published STREAM or Geekbench numbers, and need a release build.
 
 `kiln info <id>` prints the full breakdown of each one.
 
@@ -57,6 +63,7 @@ kiln run cpu-stress ram-hash --set duration=20m --temp-max 88
 sudo ~/.local/bin/kiln run fio-verify --set device=/dev/nvme1n1 --set size=20G --yes-destroy
 kiln runs                                              # history
 kiln report 2026-10-20T17-07-07 > report.md
+kiln compare 2026-10-20T17-07-07 2026-10-21T09-12-00     # metrics side by side with % change
 kiln log 2026-10-20T17-07-07 1                         # log of test 1
 ```
 

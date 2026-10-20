@@ -144,6 +144,82 @@ fn trim_float(v: f64) -> String {
     }
 }
 
+/// Two runs side by side. Tests are matched by id in order, so the same
+/// plan run twice lines up test for test.
+pub fn compare(a: &Run, b: &Run) -> String {
+    let mut out = String::new();
+    let _ = writeln!(out, "A: {}  ({})", a.id, a.env.cpu_model);
+    let _ = writeln!(out, "B: {}  ({})", b.id, b.env.cpu_model);
+    if a.env.board != b.env.board || a.env.bios != b.env.bios || a.env.kernel != b.env.kernel {
+        let _ = writeln!(out, "note: board, BIOS or kernel differ between runs");
+    }
+    let mut used = vec![false; b.results.len()];
+    for ra in &a.results {
+        let Some((bi, rb)) = b
+            .results
+            .iter()
+            .enumerate()
+            .find(|(i, r)| !used[*i] && r.test_id == ra.test_id)
+        else {
+            let _ = writeln!(out, "\n{}: only in A", ra.name);
+            continue;
+        };
+        used[bi] = true;
+        let _ = writeln!(
+            out,
+            "\n{}  ({} / {})",
+            ra.name,
+            ra.status.label(),
+            rb.status.label()
+        );
+        let _ = writeln!(
+            out,
+            "  {:<24} {:>12} {:>12} {:>9}",
+            "metric", "A", "B", "change"
+        );
+        let secs =
+            |r: &crate::engine::TestResult| (r.ended - r.started).num_seconds().max(0) as f64;
+        let mut rows: Vec<(String, Option<f64>, Option<f64>)> = vec![
+            ("duration_s".into(), Some(secs(ra)), Some(secs(rb))),
+            (
+                "max_temp_c".into(),
+                ra.max_temp_c.map(|t| t as f64),
+                rb.max_temp_c.map(|t| t as f64),
+            ),
+        ];
+        let mut keys: Vec<&String> = ra.metrics.keys().chain(rb.metrics.keys()).collect();
+        keys.sort();
+        keys.dedup();
+        for k in keys {
+            rows.push((
+                k.clone(),
+                ra.metrics.get(k).copied(),
+                rb.metrics.get(k).copied(),
+            ));
+        }
+        for (key, va, vb) in rows {
+            let change = match (va, vb) {
+                (Some(x), Some(y)) if x != 0.0 => format!("{:+.1}%", (y - x) / x * 100.0),
+                _ => "-".into(),
+            };
+            let _ = writeln!(
+                out,
+                "  {:<24} {:>12} {:>12} {:>9}",
+                key,
+                va.map(trim_float).unwrap_or_else(|| "-".into()),
+                vb.map(trim_float).unwrap_or_else(|| "-".into()),
+                change
+            );
+        }
+    }
+    for (i, rb) in b.results.iter().enumerate() {
+        if !used[i] {
+            let _ = writeln!(out, "\n{}: only in B", rb.name);
+        }
+    }
+    out
+}
+
 /// One-line summary used by `kiln runs` and the history screen.
 pub fn one_line(run: &Run) -> String {
     let state = if run.in_progress {

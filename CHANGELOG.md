@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Engine: test registry, parameter specs with validation, guards (temperature cap, time cap, kernel log patterns, stop on fail, cooldown), sysfs sensor sampler, sequential runner with SIGINT then SIGKILL escalation, per-test logs and `run.json` written after every test.
 - Tests: `cpu-stress`, `ram-stress`, `ram-hash`, `fio-verify`, `btrfs-harness`, `health-snapshot`.
+- Benchmarks: `cpu-bench` (single and all-thread units/s), `mem-bandwidth` (STREAM GB/s), `mem-latency` (pointer-chase ns), `disk-read` (fio read-only MB/s and IOPS). `kiln compare <run> <run>` puts two runs side by side with percentage change.
 - Safety: destructive tests refuse mounted devices and the system disk, need an explicit device, and require `--yes-destroy` (CLI) or a typed confirmation (TUI).
 - Headless CLI: `doctor`, `list`, `info`, `run`, `runs`, `report`, `log`, `profile`, `config`.
 - TUI: test picker, setup form, live dashboard with temperature sparkline and kernel log, results, history with log viewer, settings with developer tools. Keyboard (arrows and h/j/k/l reserved for navigation) and mouse.

@@ -45,6 +45,17 @@ pub fn check_destructive_target(device: &str) -> Result<String> {
     Ok(canonical_str)
 }
 
+/// A device that will only be read: must exist and be a block device.
+/// Mounted and system disks are fine.
+pub fn check_read_target(device: &str) -> Result<String> {
+    let canonical =
+        std::fs::canonicalize(device).map_err(|_| anyhow::anyhow!("{device} does not exist"))?;
+    if !is_block_device(&std::fs::metadata(&canonical)?) {
+        bail!("{device} is not a block device");
+    }
+    Ok(canonical.to_string_lossy().to_string())
+}
+
 fn is_block_device(meta: &std::fs::Metadata) -> bool {
     use std::os::unix::fs::FileTypeExt;
     meta.file_type().is_block_device()

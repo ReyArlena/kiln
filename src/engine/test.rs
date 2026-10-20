@@ -33,6 +33,7 @@ pub enum Category {
     Memory,
     Storage,
     Health,
+    Benchmark,
 }
 
 impl Category {
@@ -42,6 +43,7 @@ impl Category {
             Self::Memory => "Memory",
             Self::Storage => "Storage",
             Self::Health => "Health",
+            Self::Benchmark => "Bench",
         }
     }
 }

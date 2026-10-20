@@ -6,11 +6,16 @@
 //! and a `description` that says what runs, what is measured and how the
 //! verdict is decided. Mark it `destructive` if it writes to a block device.
 
+mod bench;
 mod btrfs_harness;
+mod cpu_bench;
 mod cpu_stress;
 mod device;
+mod disk_read;
 mod fio_verify;
 mod health_snapshot;
+mod mem_bandwidth;
+mod mem_latency;
 mod ram_hash;
 mod ram_stress;
 mod stress_ng;
@@ -27,5 +32,9 @@ pub fn all() -> Vec<Arc<dyn Test>> {
         Arc::new(fio_verify::FioVerify::new()),
         Arc::new(btrfs_harness::BtrfsHarness::new()),
         Arc::new(health_snapshot::HealthSnapshot::new()),
+        Arc::new(cpu_bench::CpuBench::new()),
+        Arc::new(mem_bandwidth::MemBandwidth::new()),
+        Arc::new(mem_latency::MemLatency::new()),
+        Arc::new(disk_read::DiskRead::new()),
     ]
 }
